@@ -8,6 +8,7 @@ import { installBots } from './bots.js';
 import { installVehicles } from './vehicles.js';
 import { installOnline } from './online.js';
 import { Effects } from './effects.js';
+import { installBomb } from './bomb.js';
 
 const V3 = THREE.Vector3;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -22,6 +23,7 @@ export class Match {
   constructor({ renderer, scene, world, profile, audio, opts, hudRoot, onExit }) {
     Object.assign(this, { renderer, scene, world, profile, audio, opts, onExit });
     this.rnd = mulberry32((Math.random() * 1e9) | 0);
+    this.bomb = !!(opts.online && opts.online.mode === 'bomb'); this.myTeam = this.bomb ? opts.online.team : 0;
     this.needLock = !new URLSearchParams(location.search).has('nolock');
     this.timeScale = Number(new URLSearchParams(location.search).get('speed')) || 1;
     this.camera = new THREE.PerspectiveCamera(80, innerWidth / innerHeight, 0.1, 3500);
@@ -41,17 +43,19 @@ export class Match {
     this.initState();
     this.initBots();
     this.initOnline();
+    this.initBomb();
     this.bindInput();
-    this.setupZoneMesh();
+    this.setupZoneMesh(); if (this.bomb) this.zoneMesh.visible = false;
     this.hud.setStats(this.alive, 0, 0);
     this.refreshWeaponUI();
-    this.hud.banner('SPRUNG!', `Karte: ${world.mapName} · WASD steuern · Leertaste = Fallschirm`, 4500);
+    if (!this.bomb) this.hud.banner('SPRUNG!', `Karte: ${world.mapName} · WASD steuern · Leertaste = Fallschirm`, 4500);
     this.last = performance.now(); this.running = true;
     this.loop = this.loop.bind(this); requestAnimationFrame(this.loop);
   }
 
   // ---------- Zustand ----------
   initState() {
+    if (this.bomb) { this.attTeam = 0; this.bombSetup(); }
     this.time = 0; this.over = false; this.paused = false; this.locked = false;
     this.zoneIdx = 0; this.zoneState = 'wait'; this.zoneT = 0;
     this.zone = { cx: 0, cz: 0, r: 1000, tcx: 0, tcz: 0, tr: ZONE_PHASES[0].r };
@@ -66,6 +70,7 @@ export class Match {
       vehicle: null, camYaw: 0, camPitch: 0.2, fireCD: 0, reload: 0, ads: 0, swap: 0, healT: 0, stepT: 0, bob: 0, interact: 0, alive: true, shotsFired: 0, dist: 0,
     };
     p.yaw = Math.atan2(p.pos.x, p.pos.z); // forward = (-sin, -cos) -> Blick zur Inselmitte
+    if (this.bomb) this.bombPlace(p);
     this.camera.position.copy(p.pos);
     this.tmpV = new V3(); this.tmpV2 = new V3();
     this.sway = { x: 0, y: 0 }; this.kick = 0; this.flashT = 0; this.reloadAnim = 0;
@@ -146,7 +151,7 @@ export class Match {
       const d = Math.hypot(b.x - pos.x, b.y + 0.9 - pos.y, b.z - pos.z);
       if (d < R) this.damageBot(b, def.dmg * (1 - d / R), owner, false, def.name);
     }
-    if (this.remotes && owner === 'player') for (const r of this.remotes.values()) { if (!r.alive) continue; const d = Math.hypot(r.x - pos.x, r.y + 0.9 - pos.y, r.z - pos.z); if (d < R) this.netHit(r, def.dmg * (1 - d / R), false, def.name); }
+    if (this.remotes && owner === 'player') for (const r of this.remotes.values()) { if (!r.alive || (this.bomb && r.team === this.myTeam)) continue; const d = Math.hypot(r.x - pos.x, r.y + 0.9 - pos.y, r.z - pos.z); if (d < R) this.netHit(r, def.dmg * (1 - d / R), false, def.name); }
     for (const v of this.world.vehicles) { if (v.wreck) continue; const d = Math.hypot(v.x - pos.x, v.y + 1 - pos.y, v.z - pos.z); if (d < R + 2) this.damageVehicle(v, def.dmg * 1.5 * (1 - d / (R + 2)), owner); }
     if (this.player.alive && dp < R) this.damagePlayer(def.dmg * 0.6 * (1 - dp / R), pos, owner === 'player' ? 'Eigenbeschuss' : owner && owner.name ? owner.name : 'Explosion', def.name);
   }
@@ -160,7 +165,8 @@ export class Match {
         if (e.code === 'Escape') return;
         this.keys.add(e.code);
         if (e.code === 'KeyR') this.startReload();
-        if (e.code === 'Digit1') this.switchTo(0); if (e.code === 'Digit2') this.switchTo(1); if (e.code === 'Digit3') this.switchTo(2);
+        if (this.bomb && this.frozen && this.player.alive && /^Digit[1-4]$/.test(e.code)) this.loadoutPick(+e.code.slice(5) - 1);
+        else { if (e.code === 'Digit1') this.switchTo(0); if (e.code === 'Digit2') this.switchTo(1); if (e.code === 'Digit3') this.switchTo(2); }
         if (e.code === 'KeyH') this.useMedkit();
         if (e.code === 'KeyE') this.toggleVehicle();
         if (e.code === 'KeyM') this.hud.toggleBigMap(!this.hud.bigMapOpen());
@@ -334,7 +340,7 @@ export class Match {
     }
     let remote = null;
     if (this.remotes) for (const b of this.remotes.values()) {
-      if (!b.alive) continue;
+      if (!b.alive || (this.bomb && b.team === this.myTeam)) continue;
       const px = ox - b.x, pz = oz - b.z, a = dx * dx + dz * dz; if (a < 1e-8) continue;
       const bb = px * dx + pz * dz, c = px * px + pz * pz - 0.16, disc = bb * bb - a * c; if (disc < 0) continue;
       const sq = Math.sqrt(disc); let t = (-bb - sq) / a; if (t < 0) t = (-bb + sq) / a; if (t < 0 || t >= best) continue;
@@ -396,6 +402,7 @@ export class Match {
     this.refreshWeaponUI();
   }
   updateInteract(dt) {
+    if (this.bomb) { this.bombInteract(dt); return; }
     const p = this.player; let crate = null;
     if (p.state === 'ground') crate = this.world.nearestCrate(p.pos.x, p.pos.y, p.pos.z, 2.6);
     if (!crate) { p.interact = 0; this.hud.setProgress(0); const nv = p.state === 'ground' ? this.nearestVehicle(p.pos.x, p.pos.z, 3.6) : null; this.hud.setPrompt(nv ? `E: ${nv.name} fahren` : ''); return; }
@@ -424,6 +431,7 @@ export class Match {
     if (p.hp <= 0) this.die(srcName || 'Zone', weaponName || '', false);
   }
   die(killer, weapon, quit) {
+    if (this.bomb) return this.bombDie(killer, weapon, quit);
     const p = this.player; if (!p.alive) return;
     if (p.vehicle) { p.vehicle.occupied = false; p.vehicle = null; this.audio.engineStop?.(); this.hud.setSpeedo(null); }
     p.alive = false; p.hp = 0; p.state = 'dead'; this.over = true;
@@ -485,10 +493,11 @@ export class Match {
   updatePlayer(dt) {
     const p = this.player, w = this.weapon(), cam = this.camera;
     if (p.state === 'drive') { this.updateDriving(dt); return; }
+    if (p.state === 'spectate') { this.updateSpectate(dt); return; }
     const sens = 0.0022 * this.profile.data.settings.sens * (p.ads > 0.5 && w ? 1 / Math.sqrt(w.def.zoom) : 1);
     p.yaw -= this.mouse.dx * sens; p.pitch = clamp(p.pitch - this.mouse.dy * sens, -1.5, 1.5); this.mouse.dx = this.mouse.dy = 0;
     p.recoilP = Math.max(0, p.recoilP - (0.05 + p.recoilP * 6) * dt); p.recoilY *= Math.max(0, 1 - 5 * dt);
-    const k = this.keys, fwd = (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0), strafe = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
+    const k = this.keys, fz = this.frozen ? 0 : 1, fwd = ((k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0)) * fz, strafe = ((k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0)) * fz;
     const sy = Math.sin(p.yaw), cy = Math.cos(p.yaw);
     const wx = -sy * fwd + cy * strafe, wz = -cy * fwd - sy * strafe, wl = Math.hypot(wx, wz) || 1;
     if (p.state === 'fall') {
@@ -510,11 +519,11 @@ export class Match {
       if (gH < -0.3) sp *= 0.55; if (p.healT > 0) sp *= 0.6;
       const tx = (fwd || strafe ? wx / wl : 0) * sp, tz = (fwd || strafe ? wz / wl : 0) * sp, a = 1 - Math.exp(-(p.onGround ? 12 : 1.5) * dt);
       p.vel.x = lerp(p.vel.x, tx, a); p.vel.z = lerp(p.vel.z, tz, a);
-      if (p.onGround && k.has('Space') && p.crouch < 0.5) { p.vel.y = 5.6; p.onGround = false; }
+      if (p.onGround && k.has('Space') && p.crouch < 0.5 && !this.frozen) { p.vel.y = 5.6; p.onGround = false; }
       p.vel.y -= 17 * dt;
       const ox = p.pos.x, oz = p.pos.z;
       p.pos.x += p.vel.x * dt; p.pos.z += p.vel.z * dt; p.pos.y += p.vel.y * dt;
-      this.world.collide(p.pos, 0.38, p.pos.y, 1.8 - p.crouch * 0.6); this.collideVehicles(p.pos, 0.38);
+      this.world.collide(p.pos, 0.38, p.pos.y, 1.8 - p.crouch * 0.6); this.collideVehicles(p.pos, 0.38); if (this.bomb) this.bombClamp(p.pos);
       const r = Math.hypot(p.pos.x, p.pos.z); if (r > 985) { p.pos.x *= 985 / r; p.pos.z *= 985 / r; }
       const g = this.world.groundAt(p.pos.x, p.pos.z, p.pos.y);
       if (p.pos.y <= g) { if (!p.onGround && p.vel.y < -9) { this.damagePlayer(Math.max(0, (-p.vel.y - 9) * 6), null, 'Sturz', ''); } p.pos.y = g; p.vel.y = 0; p.onGround = true; } else if (p.pos.y > g + 0.08) p.onGround = false;
@@ -527,7 +536,7 @@ export class Match {
       p.fireCD = Math.max(0, p.fireCD - dt); p.swap = Math.max(0, p.swap - dt);
       if (p.healT > 0) { p.healT -= dt; if (p.healT <= 0) { p.hp = Math.min(100, p.hp + 60); this.audio.pickup(); } }
       if (p.reload > 0) { p.reload -= dt; if (p.reload <= 0) { p.reload = 0; this.finishReload(); } }
-      const trigger = w && (w.def.auto ? this.mouse.l : this.mouse.lClick && this.mouse.l);
+      const trigger = w && !this.frozen && (w.def.auto ? this.mouse.l : this.mouse.lClick && this.mouse.l);
       if (w && trigger && p.fireCD <= 0 && p.reload <= 0 && !p.sprint && p.swap <= 0 && p.healT <= 0) {
         if (w.mag > 0) { this.fire(); if (!w.def.auto) this.mouse.lClick = false; }
         else { p.fireCD = 0.25; this.audio.empty(); this.startReload(); this.mouse.lClick = false; }
@@ -591,7 +600,7 @@ export class Match {
   step(dt) {
     this.time += dt; this.hurtT = Math.max(0, (this.hurtT || 0) - dt);
     if (!this.over) {
-      this.updatePlayer(dt); this.updateInteract(dt); this.updateZone(dt);
+      this.updatePlayer(dt); this.updateInteract(dt); if (!this.bomb) this.updateZone(dt); else this.bombTick(dt);
     } else if (this.player.state === 'dead') { this.camera.rotation.z = lerp(this.camera.rotation.z, 0.5, dt * 2); }
     if (this.net && !this.over) this.netTick(dt);
     this.updateRemotes(dt); this.updateBots(dt); this.updateVehicles(dt); this.updateProjectiles(dt); this.updateEffects(dt);
@@ -618,3 +627,4 @@ Match.ZP = ZONE_PHASES;
 installBots(Match);
 installVehicles(Match);
 installOnline(Match);
+installBomb(Match);

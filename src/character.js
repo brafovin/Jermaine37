@@ -17,10 +17,10 @@ export const characterReady = () => !!base;
 const TINTS = [0xffffff, 0xd8d0c0, 0xc8d0d8, 0xe0c8c8, 0xc8d8c8, 0xb8b8b8];
 
 export class Actor {
-  constructor(seed = 0) {
+  constructor(seed = 0, tintHex = null) {
     this.root = new THREE.Group();
     this.model = clone(base.scene); this.model.scale.setScalar(scale); this.root.add(this.model);
-    const tint = new THREE.Color(TINTS[seed % TINTS.length]);
+    const tint = new THREE.Color(tintHex ?? TINTS[seed % TINTS.length]);
     this.model.traverse((o) => {
       if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; o.material = o.material.clone(); o.material.color.copy(tint); o.material.roughness = 0.85; o.material.metalness = 0; }
     });

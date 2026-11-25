@@ -26,12 +26,12 @@ export function installOnline(Match) {
     for (const pl of on.players) {
       if (pl.id === on.you) continue;
       let actor = null, group, outfit = null;
-      if (characterReady()) { actor = new Actor(pl.id); group = new THREE.Group(); group.add(actor.root); actor.attachWeapon(flatWeapon(WEAPON_BY_ID.sidekick)); }
+      if (characterReady()) { actor = new Actor(pl.id, this.bomb ? (pl.team === 0 ? 0xffc080 : 0x9ec0ff) : null); group = new THREE.Group(); group.add(actor.root); actor.attachWeapon(flatWeapon(WEAPON_BY_ID.sidekick)); }
       else { outfit = randomOutfit(mulberry32(on.seed + pl.id * 131)); group = makeHumanGroup(outfit, false); }
-      group.add(nameSprite(pl.name));
+      if (!this.bomb || pl.team === this.myTeam) group.add(nameSprite(pl.name));
       const [sx, sz] = this.spawnPos(pl.index, on.count);
       group.position.set(sx, 300, sz); this.scene.add(group);
-      this.remotes.set(pl.id, { id: pl.id, name: pl.name, rank: pl.rank, group, outfit, actor, wid: 'sidekick', x: sx, y: 300, z: sz, tx: sx, ty: 300, tz: sz, yaw: 0, tyaw: 0, pitch: 0, walk: 0, moving: false, aim: 0.7, w: 'sidekick', alive: true, ping: 0, st: 'fall', t: 0 });
+      this.remotes.set(pl.id, { id: pl.id, team: pl.team, name: pl.name, rank: pl.rank, group, outfit, actor, wid: 'sidekick', x: sx, y: 300, z: sz, tx: sx, ty: 300, tz: sz, yaw: 0, tyaw: 0, pitch: 0, walk: 0, moving: false, aim: 0.7, w: 'sidekick', alive: true, ping: 0, st: 'fall', t: 0 });
     }
     const n = this.net;
     n.on('s', (m) => { const r = this.remotes.get(m.id); if (!r) return; r.tx = m.x; r.ty = m.y; r.tz = m.z; r.tyaw = m.yaw; r.pitch = m.p; r.st = m.st; r.aim = 0.6 + (m.a || 0) * 0.4; r.w = m.w; r.crouch = m.c; })
@@ -64,11 +64,12 @@ export function installOnline(Match) {
   P.netHit = function (r, dmg, head, wname) { this.net.send({ t: 'hit', to: r.id, dmg: Math.round(dmg), head, w: wname, x: r2(this.player.pos.x), z: r2(this.player.pos.z) }); };
   P.netDead = function (weapon) {
     if (!this.net) return; const p = this.player, w = this.weapon(), by = this.lastHitBy && this.time - this.lastHitBy.t < 12 ? this.lastHitBy.id : null;
-    this.net.send({ t: 'dead', by, w: weapon || (this.lastHitBy ? this.lastHitBy.w : ''), x: r2(p.pos.x), y: r2(p.pos.y), z: r2(p.pos.z), loot: { w: w ? w.def.id : null, cash: Math.floor(p.cash * 0.5) } });
-    setTimeout(() => this.net && this.net.close(), 400);
+    this.net.send({ t: 'dead', by, w: weapon || (this.lastHitBy ? this.lastHitBy.w : ''), x: r2(p.pos.x), y: r2(p.pos.y), z: r2(p.pos.z), loot: this.bomb ? null : { w: w ? w.def.id : null, cash: Math.floor(p.cash * 0.5) } });
+    if (!this.bomb) setTimeout(() => this.net && this.net.close(), 400);
   };
   P.onRemoteDead = function (m) {
     if (m.id === this.myId) return;
+    if (this.bomb) return this.onBombDead(m);
     const r = this.remotes.get(m.id), p = this.player; if (!r || !r.alive) return;
     r.alive = false; r.group.visible = false; this.alive--;
     const killer = m.by === this.myId ? 'Du' : m.by ? (this.remotes.get(m.by) || {}).name || '?' : 'Zone', mine = m.by === this.myId;

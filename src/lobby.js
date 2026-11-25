@@ -73,7 +73,8 @@ export class Lobby {
     <div class="lb-br">
       <div class="modes">
         <button class="mode on" data-m="br"><b>BATTLE ROYALE</b><small>100 Spieler · Verdansk Island</small></button>
-        <button class="mode" data-m="online"><b>ONLINE</b><small>Echte Spieler</small></button>
+        <button class="mode" data-m="online"><b>ONLINE</b><small>Battle Royale · echte Spieler</small></button>
+        <button class="mode" data-m="bomb"><b>BOMBE 6v6</b><small>Online · Bombe legen &amp; entschärfen</small></button>
         <button class="mode" data-m="ranked"><b>RANKED</b><small id="lb-rk-sub"></small><div class="mode-badge" id="lb-mbadge"></div></button>
       </div>
       <button class="play" id="lb-play"><span>▶ SPIEL STARTEN</span><small>MATCH FINDEN</small></button>

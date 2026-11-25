@@ -79,3 +79,13 @@ Unter `public/assets/` liegen frei nutzbare CC0-Assets von [Poly Haven](https://
 - Dynamische Auflösung: ruckelt es, senkt das Spiel die Render-Auflösung automatisch und erhöht sie bei Reserve wieder. Fehler im Spiel-Loop werden abgefangen, das Spiel läuft weiter.
 - Schüsse: geschichteter Knall mit Hall, dumpferem Klang und Schallverzögerung bei Entfernung, Hülsen, Mündungsrauch und Einschusslöcher auf Wänden und Boden.
 - Treffer: Blutspritzer, Blutflecken auf Boden und Wänden, Blutlachen bei Kills und Blut auf dem Bildschirm, wenn man selbst getroffen wird.
+
+## Bomben-Modus (6 gegen 6, online)
+
+Wähle in der Lobby **BOMBE 6v6** (Server nötig, siehe Online-Modus). Der Server bildet zwei Teams (bis zu 6 gegen 6, Start ab 2 Spielern nach 20 s) und steuert die Runden:
+
+- **Ablauf:** 8 s Vorbereitung (Waffe wählen mit **1–4**: Sturmgewehr, MP, Schrotflinte, Scharfschütze, dazu Pistole und Rüstung), danach 2 Minuten Rundenzeit. Wer zuerst 4 Runden gewinnt, gewinnt das Match. Nach 3 Runden wechseln die Seiten.
+- **Angreifer:** gehen zu Platz **A** oder **B** und halten **F** (4 s), um die Bombe zu legen. Danach explodiert sie nach 40 s.
+- **Verteidiger:** verhindern das Legen oder halten **F** (6 s) an der Bombe, um sie zu entschärfen.
+- **Rundenende:** alle Gegner ausgeschaltet, Bombe explodiert/entschärft oder Zeit abgelaufen (dann gewinnen die Verteidiger).
+- Gestorbene schauen bis zur nächsten Runde zu (Klick wechselt den Spieler). Kein Friendly Fire. Gespielt wird in der größten Stadt der (zufälligen) Karte, ohne Kisten, Fahrzeuge und Zone. Der Server kann mit `BOMB_MIN=1 npm run online` zum Testen allein gestartet werden.

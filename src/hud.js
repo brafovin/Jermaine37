@@ -21,6 +21,8 @@ export class HUD {
     <div id="prompt"></div>
     <div id="progress"><i></i></div>
     <div id="toasts"></div>
+    <div id="bombhud"></div>
+    <div id="loadout"><h3>WAFFE WÄHLEN</h3><div><b>1</b> Sturmgewehr <i>Falcon AR</i></div><div><b>2</b> MP <i>Viper</i></div><div><b>3</b> Schrotflinte <i>Breacher</i></div><div><b>4</b> Scharfschütze <i>Longshot</i></div><small>+ Pistole · Rüstung 50</small></div>
     <div id="chute"></div>
     <div id="speedo"><b id="h-spd">0</b><span>km/h</span><div class="vhp"><i id="h-vhp"></i></div></div>
     <div class="hud-bl">
@@ -94,6 +96,7 @@ export class HUD {
     }
     while (box.children.length > 9) box.firstChild.remove();
   }
+  setBombHud(html) { if (this._c.bh !== html) { this._c.bh = html; this.el('bombhud').innerHTML = html; } }
   setPrompt(t) { const p = this.el('prompt'); if (this._c.prompt !== t) { this._c.prompt = t; p.textContent = t; p.style.display = t ? 'block' : 'none'; } }
   setProgress(f) { const p = this.el('progress'); p.style.display = f > 0 ? 'block' : 'none'; p.firstChild.style.width = f * 100 + '%'; }
   setChute(t) { const c = this.el('chute'); if (this._c.chute !== t) { this._c.chute = t; c.innerHTML = t || ''; c.style.display = t ? 'block' : 'none'; } }

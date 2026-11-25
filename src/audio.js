@@ -64,6 +64,7 @@ export class AudioFX {
     if (cls === 'Raketenwerfer') this._noise(0.7, 1400, 0.4, 0.8 * v, pan, 'lowpass', d, bus);
     if (dist > 120 && cls !== 'Raketenwerfer') this._noise(0.4, 600, 0.5, 0.35 * v, pan, 'lowpass', d + 0.15, bus); // dumpfes Echo in der Ferne
   }
+  beep(v = 1) { if (!this.ctx) return; this._tone(1900, 0.09, 0.28 * v, 'square'); }
   casing() { if (!this.ctx || this.budget-- <= 0) return; this._tone(3600 + Math.random() * 1500, 0.07, 0.07, 'triangle'); this._tone(5200, 0.04, 0.04, 'sine', 0, 0.02); }
   flesh() { if (!this.ctx) return; this._noise(0.12, 500, 0.8, 0.5, 0, 'lowpass'); this._tone(95, 0.12, 0.45, 'sine', 0, 0, -40); }
   ping() { if (!this.ctx) return; this._tone(2400 + Math.random() * 900, 0.18, 0.1, 'sine', (Math.random() - 0.5) * 0.6, 0, -900); }
