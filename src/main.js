@@ -20,7 +20,7 @@ const audio = new AudioFX(); audio.setVolume(profile.data.settings.volume);
 const canvas = document.getElementById('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.9;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.75;
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const qual = () => QUALITY[profile.data.settings.quality] || QUALITY.high;
 const applyRes = () => { renderer.setPixelRatio(qual().pr()); renderer.setSize(innerWidth, innerHeight); };
