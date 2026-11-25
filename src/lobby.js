@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import { RANKS, WEAPONS, WEAPON_BY_ID, SKINS, SKIN_BY_ID, COLORS, CHARS, ITEMS, ITEM_BY, ITEM_LABEL, CHAR_BY_ID, resolveSkin, RARITY, AMMO, BP_TIERS, BP_XP, BP_PREMIUM_PRICE, bpReward, hex, PLACEMENT_MATCHES } from './data.js';
+import { charLabel, RANKS, WEAPONS, WEAPON_BY_ID, SKINS, SKIN_BY_ID, COLORS, CHARS, ITEMS, ITEM_BY, ITEM_LABEL, CHAR_BY_ID, resolveSkin, RARITY, AMMO, BP_TIERS, BP_XP, BP_PREMIUM_PRICE, bpReward, hex, PLACEMENT_MATCHES } from './data.js';
 import { badgeSVG } from './badges.js';
 import { makeSoldier } from './weaponmodel.js';
 import { xpForLevel } from './profile.js';
 import { controlsUI } from './controls.js';
+import { loadLeaderboard } from './leaderboard.js';
 
 export class Lobby {
   constructor({ renderer, profile, audio, root, onPlay, onQuality }) {
@@ -39,7 +40,7 @@ export class Lobby {
   rebuildSoldier() {
     this.soldierHolder.clear();
     const d = this.profile.data, skin = resolveSkin(d.skin, d.skinColor);
-    this.soldier = makeSoldier(skin, WEAPON_BY_ID[this.previewWeapon], (CHAR_BY_ID[d.charSkin] || CHARS[0]).tint); this.soldierHolder.add(this.soldier);
+    this.soldier = makeSoldier(skin, WEAPON_BY_ID[this.previewWeapon], (CHAR_BY_ID[d.charSkin] || CHARS[0]).tint, (CHAR_BY_ID[d.charSkin] || CHARS[0]).model || 'soldier'); this.soldierHolder.add(this.soldier);
   }
   resize() { this.cam.aspect = innerWidth / innerHeight; this.cam.updateProjectionMatrix(); }
   start() {
@@ -69,6 +70,7 @@ export class Lobby {
       <button class="nav" data-p="bp"><i>★</i><span>BATTLE PASS</span></button>
       <button class="nav" data-p="arsenal"><i>🔫</i><span>WAFFEN</span></button>
       <button class="nav" data-p="rank"><i>🏆</i><span>RANG</span></button>
+      <button class="nav" data-p="top"><i>🥇</i><span>TOP 100</span></button>
     </div>
     <div class="lb-title"><b>JERMAINE37</b><span>BATTLE ROYALE</span></div>
     <div class="lb-br">
@@ -109,7 +111,7 @@ export class Lobby {
     if (this._ctl && name !== 'settings') { this._ctl.destroy(); this._ctl = null; }
     this.panelName = name; const b = this.root.querySelector('#panel-body'), pan = this.root.querySelector('#panel');
     pan.style.display = 'flex';
-    ({ shop: () => this.pShop(b), bp: () => this.pBP(b), arsenal: () => this.pArsenal(b), rank: () => this.pRank(b), settings: () => this.pSettings(b), account: () => this.pAccount(b) })[name]();
+    ({ top: () => this.pTop(b), shop: () => this.pShop(b), bp: () => this.pBP(b), arsenal: () => this.pArsenal(b), rank: () => this.pRank(b), settings: () => this.pSettings(b), account: () => this.pAccount(b) })[name]();
   }
   closePanel() { if (this._ctl) { this._ctl.destroy(); this._ctl = null; } this.panelName = null; const p = this.root.querySelector('#panel'); if (p) p.style.display = 'none'; }
   rerender() { if (this.panelName) this.openPanel(this.panelName); this.refreshTop(); }
@@ -139,7 +141,7 @@ export class Lobby {
   rewardHtml(r) {
     if (r.type === 'coins') return `<div class="rw"><i class="coin big"></i><b>${r.amount}</b></div>`;
     const it = ITEM_BY(r.type, r.id);
-    return `<div class="rw skin" style="--rc:${RARITY[it.rarity].color}"><div class="sw ${r.type === 'color' ? 'round' : ''}" style="background:${this.swatchCss(r.type, it)}"></div><b>${it.name}</b><small>${ITEM_LABEL[r.type]}</small></div>`;
+    return `<div class="rw skin" style="--rc:${RARITY[it.rarity].color}"><div class="sw ${r.type === 'color' ? 'round' : ''}" style="background:${this.swatchCss(r.type, it)}"></div><b>${it.name}</b><small>${r.type === 'char' ? charLabel(it) : ITEM_LABEL[r.type]}</small></div>`;
   }
   pBP(b) {
     const p = this.profile, d = p.data, tier = p.bpTier, into = d.bpXp - tier * BP_XP;
@@ -181,6 +183,16 @@ export class Lobby {
         <small>Matches: ${d.stats.matches} · Siege: ${d.stats.wins} · Kills: ${d.stats.kills} · Beste Platzierung: #${d.stats.best}</small></div></div>
       <div class="rank-row">${RANKS.map((r, i) => `<div class="rk ${i === rk.idx ? 'cur' : ''}">${badgeSVG(i, 70)}<b style="color:${r.color}">${r.name}</b><small>${i === 0 ? 'Platzierung' : r.min + '+ RP'}</small></div>`).join('')}</div>
       <p class="sub">RP pro Ranked-Match: Sieg +60 · Top 5 +40 · Top 10 +28 · Top 25 +14 · Top 50 ±0 · darunter Verlust. Dazu +5 RP pro Kill (max. 10). Die Gegner in der Lobby werden nach deinem Rang ausgewählt.</p>`;
+  }
+  async pTop(b) {
+    b.innerHTML = `<h2>TOP 100 <small>Ranked · beste Spieler</small></h2><p class="sub">Lade Bestenliste…</p>`;
+    const data = await loadLeaderboard(this.profile); if (this.panelName !== 'top') return;
+    const medal = (i) => (i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1);
+    const src = data.live ? `Live-Server verbunden · ${data.total} Spieler in der Wertung${data.realCount < 100 ? ' · freie Plätze mit simulierten Spielern (BOT) gefüllt' : ''}` : 'Server nicht erreichbar: Offline-Liste mit simulierten Spielern (BOT) und deinem Eintrag';
+    const me = data.pos ? `Deine Platzierung: <b>#${data.pos}</b> · ${this.profile.rank.label} · ${data.mine.rp} RP` : data.eligible ? `Du bist nicht in den Top 100 · ${this.profile.rank.label} · ${data.mine.rp} RP` : `Spiele ${PLACEMENT_MATCHES} Ranked-Matches, um in der Liste zu erscheinen (${this.profile.data.rankedPlayed}/${PLACEMENT_MATCHES})`;
+    b.innerHTML = `<h2>TOP 100 <small>Ranked · beste Spieler</small></h2><p class="sub">${src}</p><div class="top-me">${me}</div>
+      <div class="top-wrap"><table class="top"><thead><tr><th>#</th><th>Spieler</th><th>Rang</th><th>RP</th><th>Siege</th><th>Matches</th></tr></thead><tbody>${data.rows.map((e, i) => `<tr class="${e.me ? 'me' : ''} ${i < 3 ? 'p' + (i + 1) : ''}"><td>${medal(i)}</td><td>${e.name}${e.sim ? ' <em class="bot">BOT</em>' : ''}${e.me ? ' <em class="you">DU</em>' : ''}</td><td><div class="rkc">${badgeSVG(e.rank, 26)}<span style="color:${RANKS[e.rank].color}">${RANKS[e.rank].name}</span></div></td><td><b>${e.rp}</b></td><td>${e.wins}</td><td>${e.matches}</td></tr>`).join('')}</tbody></table></div>`;
+    const row = b.querySelector('tr.me'); if (row) row.scrollIntoView({ block: 'nearest' });
   }
   pSettings(b) {
     if (this._ctl) { this._ctl.destroy(); this._ctl = null; }

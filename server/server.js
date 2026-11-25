@@ -15,7 +15,33 @@ const BOMB = { freeze: 8, live: 120, planted: 40, end: 5, winRounds: 4 };
 const dist = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.bin': 'application/octet-stream' };
 
+// Bestenliste (Ranked): wird in server/leaderboard.json gespeichert
+const LB_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'leaderboard.json');
+let lb = {}; try { lb = JSON.parse(fs.readFileSync(LB_FILE, 'utf8')); } catch { /* neu */ }
+let lbTimer; const saveLb = () => { clearTimeout(lbTimer); lbTimer = setTimeout(() => fs.writeFile(LB_FILE, JSON.stringify(lb), () => {}), 1000); };
+const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type', 'access-control-allow-methods': 'GET,POST,OPTIONS' };
+const ranked = () => Object.entries(lb).map(([id, e]) => ({ id, ...e })).sort((a, b) => b.rp - a.rp || b.wins - a.wins);
+
 const server = http.createServer((req, res) => {
+  const url = new URL(req.url, 'http://x');
+  if (req.method === 'OPTIONS') { res.writeHead(204, CORS).end(); return; }
+  if (url.pathname === '/api/leaderboard') {
+    const all = ranked(), me = url.searchParams.get('id'), idx = all.findIndex((e) => e.id === me);
+    res.writeHead(200, { ...CORS, 'content-type': 'application/json' }).end(JSON.stringify({ top: all.slice(0, 100).map(({ id, ...e }) => ({ ...e, me: id === me })), total: all.length, you: idx >= 0 ? { ...all[idx], rank: idx + 1, id: undefined } : null }));
+    return;
+  }
+  if (url.pathname === '/api/score' && req.method === 'POST') {
+    let body = ''; req.on('data', (d) => { body += d; if (body.length > 2048) req.destroy(); });
+    req.on('end', () => {
+      try {
+        const m = JSON.parse(body), id = String(m.id || ''), rp = Math.round(+m.rp);
+        if (id.length < 8 || id.length > 64 || !(rp >= 0 && rp < 100000)) throw new Error('bad');
+        lb[id] = { name: String(m.name || 'Spieler').replace(/[<>]/g, '').slice(0, 16), rp, rank: m.rank | 0, wins: Math.max(0, m.wins | 0), matches: Math.max(0, m.matches | 0), ts: Date.now() }; saveLb();
+        res.writeHead(200, { ...CORS, 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, rank: ranked().findIndex((e) => e.id === id) + 1 }));
+      } catch { res.writeHead(400, CORS).end('bad request'); }
+    });
+    return;
+  }
   let f = path.join(dist, decodeURIComponent(req.url.split('?')[0]));
   if (!f.startsWith(dist)) { res.writeHead(403).end(); return; }
   if (fs.existsSync(f) && fs.statSync(f).isDirectory()) f = path.join(f, 'index.html');

@@ -5,7 +5,7 @@ import { HALF } from './world.js';
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const angDiff = (a, b) => { let d = b - a; while (d > Math.PI) d -= 6.2832; while (d < -Math.PI) d += 6.2832; return d; };
 
-import { characterReady, Actor } from './character.js';
+import { characterReady, Actor, botModel } from './character.js';
 import { flatWeapon } from './weaponmodel.js';
 import { HUMAN_PARTS, randomOutfit, roleColor, poseHuman, roleTex, roleRough } from './human.js';
 
@@ -36,7 +36,7 @@ export function installBots(Match) {
 
   P.initBotMeshes = function () {
     if (characterReady()) {
-      this.actors = this.bots.map((b, i) => { const a = new Actor(i + 3); a.root.visible = false; a.root.rotation.order = 'YXZ'; a.attachWeapon(flatWeapon(b.w)); a.wid = b.w.id; this.scene.add(a.root); b.lx = b.x; b.lz = b.z; b.sp = 0; return a; });
+      this.actors = this.bots.map((b, i) => { const a = new Actor(i + 3, null, botModel(i)); a.root.visible = false; a.root.rotation.order = 'YXZ'; a.attachWeapon(flatWeapon(b.w)); a.wid = b.w.id; this.scene.add(a.root); b.lx = b.x; b.lz = b.z; b.sp = 0; return a; });
       this.botMeshes = {}; this.botGeos = []; this.botMats = []; this._zero = new THREE.Matrix4().makeScale(0, 0, 0); return;
     }
     const n = this.bots.length; this.botMeshes = {}; this.botGeos = []; this.botMats = [];

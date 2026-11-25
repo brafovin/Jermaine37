@@ -10,6 +10,7 @@ import { installOnline } from './online.js';
 import { Effects } from './effects.js';
 import { installBomb } from './bomb.js';
 import { controlsUI } from './controls.js';
+import { submitScore } from './leaderboard.js';
 
 const V3 = THREE.Vector3;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -464,6 +465,7 @@ export class Match {
     if (document.pointerLockElement) document.exitPointerLock();
     const p = this.player, place = this.placement || 1, ranked = this.opts.mode === 'ranked';
     const res = this.profile.applyMatch({ placement: place, kills: p.kills, surviveSec: Math.floor(this.time), cash: Math.floor(p.cash), ranked });
+    if (ranked) submitScore(this.profile);
     const rk = res.after, mm = Math.floor(this.time / 60), ss = String(Math.floor(this.time % 60)).padStart(2, '0');
     let rankHtml = '';
     if (ranked) {

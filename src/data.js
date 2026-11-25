@@ -127,7 +127,13 @@ export const CHARS = [
   { id: 'blood', name: 'Blutrot', price: 1400, rarity: 3, tint: 0xe08080 },
   { id: 'royal', name: 'Königsgarde', price: 1800, rarity: 3, tint: 0x9ab0ff },
   { id: 'gold', name: 'Goldelite', price: 3000, rarity: 4, tint: 0xffd860 },
+  { id: 'xbot', name: 'X-Bot', price: 2200, rarity: 3, tint: 0xffffff, model: 'xbot' },
+  { id: 'xbot_gold', name: 'X-Bot Gold', price: 3500, rarity: 4, tint: 0xffd860, model: 'xbot' },
+  { id: 'xbot_ruby', name: 'X-Bot Rubin', price: 2600, rarity: 3, tint: 0xff7a7a, model: 'xbot' },
+  { id: 'robot', name: 'Roboter', price: 2800, rarity: 4, tint: 0xffffff, model: 'robot' },
+  { id: 'robot_blue', name: 'Roboter Blau', price: 3000, rarity: 4, tint: 0x80b0ff, model: 'robot' },
 ];
+export const charLabel = (it) => (it && it.model ? '3D-Charakter' : 'Soldat-Variante');
 export const CHAR_BY_ID = Object.fromEntries(CHARS.map((c) => [c.id, c]));
 export const ITEMS = { skin: SKINS, color: COLORS, char: CHARS };
 export const ITEM_LABEL = { skin: 'Waffenlackierung', color: 'Skin-Farbe', char: 'Charakter-Skin' };
@@ -157,8 +163,8 @@ export const BP_TIERS = 30;
 export const BP_XP = 800;
 export const BP_PREMIUM_PRICE = 1500;
 export function bpReward(t) {
-  const freeItems = { 5: ['color', 'ocean'], 10: ['char', 'desert'], 15: ['skin', 'digital'], 20: ['color', 'toxic'], 25: ['char', 'forest'], 30: ['skin', 'tiger'] };
-  const premItems = { 1: ['color', 'crimson'], 3: ['skin', 'carbon'], 5: ['char', 'arctic'], 7: ['color', 'sun'], 10: ['skin', 'hex'], 12: ['color', 'violet'], 14: ['char', 'night'], 16: ['skin', 'marble'], 18: ['color', 'pink'], 20: ['char', 'blood'], 22: ['color', 'cyan'], 24: ['skin', 'flame'], 26: ['char', 'royal'], 28: ['color', 'snow'], 30: ['char', 'gold'] };
+  const freeItems = { 5: ['color', 'ocean'], 10: ['char', 'desert'], 15: ['skin', 'digital'], 20: ['color', 'toxic'], 25: ['char', 'xbot'], 30: ['skin', 'tiger'] };
+  const premItems = { 1: ['color', 'crimson'], 3: ['skin', 'carbon'], 5: ['char', 'robot'], 7: ['color', 'sun'], 10: ['skin', 'hex'], 12: ['color', 'violet'], 14: ['char', 'night'], 16: ['skin', 'marble'], 18: ['color', 'pink'], 20: ['char', 'xbot_ruby'], 22: ['color', 'cyan'], 24: ['skin', 'flame'], 26: ['char', 'robot_blue'], 28: ['color', 'snow'], 30: ['char', 'xbot_gold'] };
   const f = freeItems[t], p = premItems[t];
   return { free: f ? { type: f[0], id: f[1] } : { type: 'coins', amount: 50 + t * 10 }, prem: p ? { type: p[0], id: p[1] } : { type: 'coins', amount: 120 + t * 20 } };
 }

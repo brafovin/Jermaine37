@@ -143,9 +143,9 @@ export function flashTexture() {
 // Soldat für die Lobby: menschliche Figur mit Waffe in der Hand
 import { makeHumanGroup, randomOutfit } from './human.js';
 import { characterReady, Actor } from './character.js';
-export function makeSoldier(skin, def, tint = null) {
+export function makeSoldier(skin, def, tint = null, model = 'soldier') {
   if (characterReady()) {
-    const a = new Actor(0, tint), root = new THREE.Group(); root.add(a.root); a.attachWeapon(flatWeapon(def, skin), window.__wcfg || {});
+    const a = new Actor(0, tint, model), root = new THREE.Group(); root.add(a.root); a.attachWeapon(flatWeapon(def, skin), window.__wcfg || {});
     root.userData.update = (t, dt) => a.update(dt || 0.016, 0); root.userData.actor = a; return root;
   }
   const outfit = { skin: 0xd9a47e, hair: 0x3a2416, jacket: 0x4a5236, collar: 0x3a412a, pants: 0x2a2f38, vest: 0x1b1d20, shoe: 0x1c1a18, belt: 0x2a2218, cap: null, helmet: null, pack: null, pony: false, glove: 0x1a1a1a, dark: 0x0a0806, white: 0xf2efe8, iris: 0x2a4a6a, lips: 0xb06a58 };

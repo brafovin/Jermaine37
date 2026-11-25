@@ -4,6 +4,7 @@ const KEY = 'jermaine37_br_profile_v1';
 
 function fresh() {
   return {
+    playerId: (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'p' + Math.random().toString(36).slice(2) + Date.now().toString(36),
     name: 'Spieler' + ((Math.random() * 9000 + 1000) | 0),
     xp: 0,
     coins: 2500,
@@ -33,7 +34,7 @@ export class Profile {
       const raw = localStorage.getItem(KEY);
       if (raw) this.data = { ...this.data, ...JSON.parse(raw) };
       this.data.settings = { ...fresh().settings, ...this.data.settings };
-      const f = fresh(); for (const k of ['ownedColors', 'ownedChars', 'skinColor', 'charSkin']) if (this.data[k] === undefined) this.data[k] = f[k];
+      const f = fresh(); for (const k of ['ownedColors', 'ownedChars', 'skinColor', 'charSkin', 'playerId']) if (this.data[k] === undefined) this.data[k] = f[k];
     } catch (e) { /* ignore */ }
     this.listeners = new Set();
   }
