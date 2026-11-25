@@ -8,6 +8,7 @@ import { World } from './world.js';
 import { WEAPON_BY_ID } from './data.js';
 import { Net } from './net.js';
 import { loadCharacter } from './character.js';
+import { loadAssets } from './assets.js';
 
 const dpr = window.devicePixelRatio || 1;
 export const QUALITY = {
@@ -43,6 +44,7 @@ async function play(mode) {
   lobby.stop();
   await new Promise((r) => setTimeout(r, 60));
   try {
+    await assetsP; await loadCharacter();
     if (world) { world.dispose(); world = null; }
     gameScene = new THREE.Scene();
     world = new World(renderer, gameScene, qual(), (Math.random() * 1e9) | 0);
@@ -56,7 +58,8 @@ async function play(mode) {
   $('loading').style.display = 'none';
 }
 
-loadCharacter().then((g) => { if (g) lobby.rebuildSoldier(); });
+const assetsP = loadAssets();
+Promise.all([loadCharacter(), assetsP]).then(([g]) => { if (g) lobby.rebuildSoldier(); });
 window.__br = { profile, play, lobby, W: WEAPON_BY_ID, get world() { return world; } };
 lobby.start();
 
@@ -82,6 +85,7 @@ function playOnline() {
     await new Promise((r) => setTimeout(r, 400));
     $('loading').style.display = 'flex'; lobby.stop(); await new Promise((r) => setTimeout(r, 60));
     try {
+      await assetsP; await loadCharacter();
       if (world) { world.dispose(); world = null; }
       gameScene = new THREE.Scene(); world = new World(renderer, gameScene, qual(), m.seed);
       for (const v of world.vehicles) gameScene.remove(v.mesh); world.vehicles.length = 0;

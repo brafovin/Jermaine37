@@ -68,3 +68,7 @@ Im Online-Modus gibt es keine Bots und keine Fahrzeuge. Zone, Kisten und Karte s
 ## Charaktermodell
 
 Bots, Online-Spieler und der Soldat in der Lobby nutzen das geriggte Modell `public/models/Soldier.glb` (aus den three.js-Beispielen, ursprünglich von Mixamo) mit Idle-/Geh-/Lauf-Animationen. Lädt es nicht, greift die prozedurale Menschenfigur als Rückfall. Prüfe vor einer Veröffentlichung die Lizenz der Datei (Mixamo/three.js-Beispielassets) oder ersetze sie durch ein eigenes Modell mit Knochen `mixamorig*` und Animationen `Idle`, `Walk`, `Run`.
+
+## Echte Assets (Poly Haven, CC0)
+
+Unter `public/assets/` liegen frei nutzbare CC0-Assets von [Poly Haven](https://polyhaven.com) (1k-Auflösung, ca. 45 MB): Texturen (Gras, Asphalt, Backstein, Sandstein, Kistenholz) und Modelle (Pistole, Repetiergewehr, Hydrant, Straßenlaterne, Mülleimer, Betonbarriere, Payphone, Reifen). Sie werden für Gelände, Straßen, Hausfassaden, Straßenmöbel, Beutekisten sowie die Pistolen (Sidekick, Magnum) und Scharfschützengewehre (Longshot, Phantom, Reaper) genutzt. Fehlen sie, greift das Spiel auf selbst erzeugte Texturen und Modelle zurück. Die übrigen Waffen sind weiterhin selbst gebaut, weil es dafür keine passenden freien Modelle gab.

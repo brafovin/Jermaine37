@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { SKIN_BY_ID } from './data.js';
+import { ASSET } from './assets.js';
 
 const geoCache = new Map();
 function boxGeo(w, h, l) { const k = w + ',' + h + ',' + l; if (!geoCache.has(k)) geoCache.set(k, new THREE.BoxGeometry(w, h, l)); return geoCache.get(k); }
@@ -28,7 +29,7 @@ export function skinMaterials(skin) {
 }
 
 // Waffe: Lauf zeigt nach -Z, Ursprung ≈ Mitte der Verschlussgruppe
-export function makeWeaponModel(def, skin, withArms = true) {
+export function makeWeaponModel(def, skin, withArms = true, forceProc = false) {
   const m = skinMaterials(skin), g = new THREE.Group();
   const add = (geo, mat, x, y, z, rx = 0) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); o.rotation.x = rx; g.add(o); return o; };
   const B = (w, h, l, mat, x, y, z, rx) => add(boxGeo(w, h, l), mat, x, y, z, rx);
@@ -44,8 +45,16 @@ export function makeWeaponModel(def, skin, withArms = true) {
   const vgrip = (z, y = -0.07) => { B(0.032, 0.09, 0.034, m.dark, 0, y - 0.04, z, 0.1); B(0.036, 0.012, 0.04, m.accent, 0, y - 0.088, z, 0.1); };
   const magAng = (z, h = 0.16) => { B(0.04, h, 0.07, m.dark, 0, -0.09 - h / 2 + 0.03, z, 0.18); B(0.045, 0.02, 0.078, m.accent, 0, -0.09 - h + 0.03, z + 0.03, 0.18); };
   let muzzleZ = -0.5, sightY = 0.1, handZ = -0.3, gripZ = 0.05;
+  const realPart = (name, sc, cx, cy, dsight, dmuz, hz, gz, hide) => {
+    const src = ASSET.models[name]; if (forceProc || !src) return false;
+    const inner = src.clone(true); inner.traverse((o) => { if (o.isMesh) { o.castShadow = false; if (hide && hide.test(o.name)) o.visible = false; if (skin.id !== 'default' && skin.id !== undefined) { o.material = o.material.clone(); o.material.color.set(skin.accent).lerp(new THREE.Color(0xffffff), 0.55); if (skin.emissive) { o.material.emissive = new THREE.Color(skin.emissive); o.material.emissiveIntensity = 0.5; } } } });
+    inner.rotation.y = Math.PI / 2; inner.scale.setScalar(sc); const hold = new THREE.Group(); hold.add(inner); inner.position.set(0, -cy * sc, cx * sc); g.add(hold);
+    muzzleZ = dmuz; sightY = dsight; handZ = hz; gripZ = gz; return true;
+  };
+  let usedReal = false;
   switch (def.model) {
     case 'pistol':
+      { const sc = def.id === 'magnum' ? 1.4 : 1.2; if (realPart('service_pistol', sc, 0.06, 0.065, 0.035 * sc, -0.11 * sc, -0.02, 0.05, /_b$|magazine|bullet/)) { usedReal = true; break; } }
       B(0.05, 0.055, 0.24, m.body, 0, 0.03, -0.1); B(0.052, 0.012, 0.24, m.accent, 0, 0.062, -0.1);
       B(0.04, 0.11, 0.06, m.dark, 0, -0.05, 0.0, -0.2); B(0.03, 0.025, 0.05, m.dark, 0, -0.01, -0.03);
       B(0.012, 0.012, 0.012, m.accent, 0, 0.075, -0.2); muzzleZ = -0.23; sightY = 0.075; handZ = -0.02; gripZ = 0.0;
@@ -85,6 +94,7 @@ export function makeWeaponModel(def, skin, withArms = true) {
       B(0.012, 0.02, 0.012, m.accent, 0, 0.055, -0.85); muzzleZ = -0.88; sightY = 0.065; handZ = -0.45; gripZ = 0.07;
       break;
     case 'sniper':
+      if (realPart('bolt_action_rifle_7_62', def.id === 'reaper' ? 1.05 : def.id === 'phantom' ? 0.92 : 1.0, 0, 0, 0.11, -0.64 * (def.id === 'reaper' ? 1.05 : def.id === 'phantom' ? 0.92 : 1.0), -0.3, 0.08, /bullet|cartridge/)) { usedReal = true; break; }
       B(0.062, 0.09, 0.42, m.body, 0, 0, -0.08); B(0.064, 0.012, 0.42, m.accent, 0, 0.052, -0.08); railZ(-0.28, 0.1, 0.056, 0.026);
       C(0.018, 0.78, m.dark, 0, 0.012, -0.7); C(0.028, 0.08, m.dark, 0, 0.012, -1.12);
       C(0.034, 0.32, m.dark, 0, 0.115, -0.1); C(0.044, 0.07, m.dark, 0, 0.115, -0.28); C(0.044, 0.07, m.dark, 0, 0.115, 0.06); C(0.032, 0.01, m.glass, 0, 0.115, -0.3);
@@ -141,7 +151,7 @@ export function makeSoldier(skin, def) {
 const flatCache = new Map();
 export function flatWeapon(def) {
   if (!flatCache.has(def.id)) {
-    const skin = SKIN_BY_ID.default, m = makeWeaponModel(def, skin, false); m.updateMatrixWorld(true); const geos = [], col = new THREE.Color();
+    const skin = SKIN_BY_ID.default, m = makeWeaponModel(def, skin, false, true); m.updateMatrixWorld(true); const geos = [], col = new THREE.Color();
     m.traverse((o) => {
       if (!o.isMesh) return;
       const g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld);

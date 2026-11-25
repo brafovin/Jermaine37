@@ -1,9 +1,12 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { canvasTex, noiseFill, mulberry32 } from './world.js';
+import { ASSET, texOf, instanceModel } from './assets.js';
 
 // ---------------- Texturen (4 m x 3,4 m pro Geschoss-Kachel) ----------------
-function brickBase(ctx, s, tone, R) {
+function brickBase(ctx, s, tone, R, photo) {
+  const im = photo && ASSET.img[photo];
+  if (im) { for (let y = 0; y < 2; y++) for (let x = 0; x < 2; x++) ctx.drawImage(im, x * s / 2, y * s / 2, s / 2, s / 2); return; }
   ctx.fillStyle = tone; ctx.fillRect(0, 0, s, s);
   for (let y = 0; y < s; y += 10) { const off = ((y / 10) & 1) * 14; for (let x = -28; x < s; x += 28) { const v = (R() - 0.5) * 40; ctx.fillStyle = v > 0 ? `rgba(255,245,230,${v / 160})` : `rgba(60,40,30,${-v / 160})`; ctx.fillRect(x + off + 1, y + 1, 26, 8); } }
   ctx.strokeStyle = 'rgba(70,60,55,.28)'; ctx.lineWidth = 1;
@@ -23,7 +26,8 @@ function rectWindow(ctx, cx, y0, w, h, frame = '#e9e7e1') {
 }
 export function makeCityTextures() {
   const R = mulberry32(77);
-  const nyBrick = canvasTex(512, (ctx, s) => { brickBase(ctx, s, '#cfc8bd', R); grime(ctx, s, R); for (const cx of [128, 384]) rectWindow(ctx, cx, 90, 150, 250); ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(0, 500, s, 12); ctx.fillStyle = 'rgba(255,255,255,.2)'; ctx.fillRect(0, 76, s, 10); }, 0);
+  const CT = (draw) => canvasTex(1024, (c, sz) => { c.scale(sz / 512, sz / 512); draw(c, 512); }, 0);
+  const nyBrick = CT((ctx, s) => { brickBase(ctx, s, '#cfc8bd', R, 'brick_wall_005_diff'); grime(ctx, s, R); for (const cx of [128, 384]) rectWindow(ctx, cx, 90, 150, 250); ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(0, 500, s, 12); ctx.fillStyle = 'rgba(255,255,255,.2)'; ctx.fillRect(0, 76, s, 10); });
   const glass = canvasTex(512, (ctx, s) => {
     const g = ctx.createLinearGradient(0, 0, s, s); g.addColorStop(0, '#7e9fb5'); g.addColorStop(0.5, '#3b5568'); g.addColorStop(1, '#22323e'); ctx.fillStyle = g; ctx.fillRect(0, 0, s, s);
     for (let i = 0; i < 6; i++) { ctx.fillStyle = `rgba(255,255,255,${0.05 + R() * 0.08})`; ctx.beginPath(); const x = R() * s; ctx.moveTo(x, 0); ctx.lineTo(x + 60, 0); ctx.lineTo(x - 80, 440); ctx.lineTo(x - 140, 440); ctx.fill(); }
@@ -31,15 +35,15 @@ export function makeCityTextures() {
     ctx.fillStyle = '#aab4bb'; for (let x = 0; x < s; x += 128) ctx.fillRect(x - 3, 0, 6, 440);
     ctx.fillRect(0, 0, s, 4);
   }, 0);
-  const stone = canvasTex(512, (ctx, s) => {
-    ctx.fillStyle = '#d9d2c2'; ctx.fillRect(0, 0, s, s);
-    for (let y = 0; y < s; y += 75) { ctx.strokeStyle = 'rgba(80,70,55,.35)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(s, y); ctx.stroke(); const off = ((y / 75) & 1) * 80; for (let x = -160; x < s; x += 160) { ctx.beginPath(); ctx.moveTo(x + off, y); ctx.lineTo(x + off, y + 75); ctx.stroke(); } }
+  const stone = CT((ctx, s) => {
+    brickBase(ctx, s, '#d9d2c2', R, 'large_sandstone_blocks_01_diff');
+    if (!ASSET.img.large_sandstone_blocks_01_diff) for (let y = 0; y < s; y += 75) { ctx.strokeStyle = 'rgba(80,70,55,.35)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(s, y); ctx.stroke(); const off = ((y / 75) & 1) * 80; for (let x = -160; x < s; x += 160) { ctx.beginPath(); ctx.moveTo(x + off, y); ctx.lineTo(x + off, y + 75); ctx.stroke(); } }
     grime(ctx, s, R);
     for (const cx of [85, 256, 427]) { ctx.fillStyle = '#bfb7a4'; ctx.fillRect(cx - 52, 62, 104, 22); rectWindow(ctx, cx, 92, 80, 270, '#cfc8b8'); }
     ctx.fillStyle = '#efe8d6'; ctx.fillRect(0, 482, s, 30); ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(0, 482, s, 3);
-  }, 0);
-  const ldn = canvasTex(512, (ctx, s) => {
-    brickBase(ctx, s, '#cdb9a8', R); grime(ctx, s, R);
+  });
+  const ldn = CT((ctx, s) => {
+    brickBase(ctx, s, '#cdb9a8', R, 'brick_wall_001_diff'); grime(ctx, s, R);
     for (const cx of [128, 384]) {
       const w = 141, h = 255, y0 = 95;
       ctx.fillStyle = '#e4dccb'; ctx.fillRect(cx - w / 2 - 12, 76, w + 24, 16);
@@ -50,11 +54,11 @@ export function makeCityTextures() {
       ctx.fillStyle = '#d8d0be'; ctx.fillRect(cx - w / 2 - 10, y0 + h + 6, w + 20, 8);
     }
     ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(0, 502, s, 10);
-  }, 0);
+  });
   return { nyBrick, glass, stone, ldn };
 }
 
-const PAL = {
+const PAL0 = {
   nyBrick: [[0.72, 0.4, 0.3], [0.62, 0.42, 0.34], [0.64, 0.58, 0.48], [0.78, 0.7, 0.55], [0.55, 0.36, 0.3]],
   stone: [[0.88, 0.84, 0.74], [0.74, 0.74, 0.72], [0.82, 0.76, 0.62]],
   glass: [[0.55, 0.78, 0.95], [0.5, 0.6, 0.68], [0.65, 0.82, 0.86], [0.4, 0.5, 0.6]],
@@ -66,6 +70,8 @@ export const LDN_NAMES = ['Westminster', 'Camden', 'Kensington', 'Soho London', 
 
 export function buildCities(w) {
   const r = w.rnd, T = makeCityTextures();
+  const photo = !!ASSET.img.brick_wall_005_diff;
+  const PAL = Object.fromEntries(Object.entries(PAL0).map(([k, v]) => [k, v.map((c) => (photo && k !== 'glass' ? c.map((x) => 0.62 + 0.38 * x) : c))]));
   const mats = {
     nyBrick: new THREE.MeshStandardMaterial({ map: T.nyBrick, vertexColors: true, roughness: 0.92, bumpMap: T.nyBrick, bumpScale: 1.2 }),
     stone: new THREE.MeshStandardMaterial({ map: T.stone, vertexColors: true, roughness: 0.9, bumpMap: T.stone, bumpScale: 1.2 }),
@@ -213,7 +219,7 @@ export function buildCities(w) {
     const SZ = 1024, Rr = t.r * 0.95, k2 = SZ / (2 * Rr), ny = t.type === 'ny', Rn = mulberry32((t.x * 13 + t.z) | 0);
     const tex = canvasTex(SZ, (ctx, s) => {
       ctx.save(); ctx.beginPath(); ctx.arc(s / 2, s / 2, s / 2 - 1, 0, 6.2832); ctx.clip();
-      noiseFill(ctx, s, '#3d3d40', 50, 18000, Rn);
+      if (!ASSET.img.asphalt_02_diff) noiseFill(ctx, s, '#3d3d40', 50, 18000, Rn);
       const px = (x) => s / 2 + (x - t.x) * k2, pz = (z) => s / 2 + (z - t.z) * k2;
       for (const b of t.parks) {
         const cx = t.x + b.gx * t.cell, cz = t.z + b.gz * t.cell, hb = t.blk / 2;
@@ -240,6 +246,8 @@ export function buildCities(w) {
       }
       ctx.restore();
     }, 0);
+    const at = texOf('asphalt_02_diff', (Rr * 2) / 3.2), an = texOf('asphalt_02_nor', (Rr * 2) / 3.2, (Rr * 2) / 3.2, false);
+    if (at) { const bg = new THREE.CircleGeometry(Rr, 64); bg.rotateX(-Math.PI / 2); const bm = new THREE.Mesh(bg, new THREE.MeshStandardMaterial({ map: at, normalMap: an, roughness: 0.92, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })); bm.position.set(t.x, t.y + 0.05, t.z); bm.receiveShadow = true; w.scene.add(bm); }
     const geo = new THREE.CircleGeometry(Rr, 64); geo.rotateX(-Math.PI / 2);
     const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.92, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3, bumpMap: tex, bumpScale: 0.6 }));
     m.position.set(t.x, t.y + 0.07, t.z); m.receiveShadow = true; w.scene.add(m);
@@ -257,12 +265,14 @@ export function buildCityProps(w) {
     g.setAttribute('color', new THREE.BufferAttribute(cc, 3)); G.push(g);
   };
   const box = (a, b, c) => new THREE.BoxGeometry(a, b, c), cyl = (rt, rb, h, sg = 8) => new THREE.CylinderGeometry(rt, rb, h, sg);
-  const lamp = (x, z, ry) => { const y = w.heightAt(x, z); group(x, y, z, ry); part(cyl(0.07, 0.1, 6.5), [0.2, 0.22, 0.24], 0, 3.25, 0); part(box(0.08, 0.08, 1.5), [0.2, 0.22, 0.24], 0, 6.4, -0.7); part(box(0.3, 0.12, 0.6), [0.95, 0.92, 0.75], 0, 6.32, -1.35); w.addCircle(x, z, 0.2); };
-  const hydrant = (x, z) => { const y = w.heightAt(x, z); group(x, y, z, 0); part(cyl(0.12, 0.14, 0.6), [0.75, 0.1, 0.08], 0, 0.3, 0); part(cyl(0.14, 0.14, 0.06), [0.6, 0.08, 0.06], 0, 0.62, 0); part(cyl(0.05, 0.05, 0.4), [0.7, 0.1, 0.08], 0, 0.4, 0, 0, 0, Math.PI / 2); w.addCircle(x, z, 0.2); };
+  const real = { lamp: [], hydrant: [], trash: [], barrier: [], payphone: [] };
+  const lamp = (x, z, ry) => { const y = w.heightAt(x, z); if (ASSET.models.street_lamp_01 && real.lamp.length < 44) { real.lamp.push({ x, y, z, ry: ry + Math.PI / 2, s: 1.6 }); w.addCircle(x, z, 0.25); return; } group(x, y, z, ry); part(cyl(0.07, 0.1, 6.5), [0.2, 0.22, 0.24], 0, 3.25, 0); part(box(0.08, 0.08, 1.5), [0.2, 0.22, 0.24], 0, 6.4, -0.7); part(box(0.3, 0.12, 0.6), [0.95, 0.92, 0.75], 0, 6.32, -1.35); w.addCircle(x, z, 0.2); };
+  const hydrant = (x, z) => { const y = w.heightAt(x, z); if (ASSET.models.fire_hydrant && real.hydrant.length < 14) { real.hydrant.push({ x, y, z, ry: r() * 6, s: 1.0 }); w.addCircle(x, z, 0.3); return; } group(x, y, z, 0); part(cyl(0.12, 0.14, 0.6), [0.75, 0.1, 0.08], 0, 0.3, 0); part(cyl(0.14, 0.14, 0.06), [0.6, 0.08, 0.06], 0, 0.62, 0); part(cyl(0.05, 0.05, 0.4), [0.7, 0.1, 0.08], 0, 0.4, 0, 0, 0, Math.PI / 2); w.addCircle(x, z, 0.2); };
   const traffic = (x, z, ry) => { const y = w.heightAt(x, z); group(x, y, z, ry); part(cyl(0.06, 0.08, 5), [0.18, 0.2, 0.2], 0, 2.5, 0); part(box(0.3, 0.9, 0.3), [0.05, 0.05, 0.05], 0, 5.2, 0); part(box(0.2, 0.2, 0.05), [0.1, 0.9, 0.2], 0, 4.95, -0.16); part(box(0.2, 0.2, 0.05), [0.9, 0.2, 0.1], 0, 5.45, -0.16); w.addCircle(x, z, 0.2); };
   const phone = (x, z, ry) => { const y = w.heightAt(x, z); group(x, y, z, ry); part(box(0.95, 2.4, 0.95), [0.75, 0.08, 0.07], 0, 1.2, 0); for (const s of [-1, 1]) part(box(0.7, 1.6, 0.03), [0.12, 0.15, 0.18], 0, 1.35, s * 0.485); part(box(1.0, 0.1, 1.0), [0.6, 0.06, 0.05], 0, 2.42, 0); w.addCircle(x, z, 0.6); };
-  const bin = (x, z) => { const y = w.heightAt(x, z); group(x, y, z, 0); part(cyl(0.28, 0.25, 0.9, 10), [0.15, 0.3, 0.2], 0, 0.45, 0); w.addCircle(x, z, 0.3); };
-  const barrier = (x, z, q) => { const y = w.heightAt(x, z), hx = q ? 1.5 : 0.3, hz = q ? 0.3 : 1.5; group(x, y, z, q ? 0 : Math.PI / 2); part(box(3, 1.0, 0.55), [0.62, 0.6, 0.55], 0, 0.5, 0); part(box(3.02, 0.25, 0.8), [0.6, 0.58, 0.53], 0, 0.12, 0); w.addBox({ x0: x - hx, x1: x + hx, z0: z - hz, z1: z + hz, y0: y - 0.2, y1: y + 1.05 }); };
+  const bin = (x, z) => { const y = w.heightAt(x, z); if (ASSET.models.metal_trash_can && real.trash.length < 16) { real.trash.push({ x, y, z, ry: r() * 6, s: 0.8 }); w.addCircle(x, z, 0.45); return; } group(x, y, z, 0); part(cyl(0.28, 0.25, 0.9, 10), [0.15, 0.3, 0.2], 0, 0.45, 0); w.addCircle(x, z, 0.3); };
+  const barrier = (x, z, q) => { const y = w.heightAt(x, z), hx = q ? 1.5 : 0.3, hz = q ? 0.3 : 1.5;
+    if (ASSET.models.concrete_road_barrier && real.barrier.length < 14) { real.barrier.push({ x, y, z, ry: q ? 0 : Math.PI / 2, s: 1.95 }); w.addBox({ x0: x - hx, x1: x + hx, z0: z - hz, z1: z + hz, y0: y - 0.2, y1: y + 1.1 }); return; } group(x, y, z, q ? 0 : Math.PI / 2); part(box(3, 1.0, 0.55), [0.62, 0.6, 0.55], 0, 0.5, 0); part(box(3.02, 0.25, 0.8), [0.6, 0.58, 0.53], 0, 0.12, 0); w.addBox({ x0: x - hx, x1: x + hx, z0: z - hz, z1: z + hz, y0: y - 0.2, y1: y + 1.05 }); };
   const sandbags = (x, z, q) => { const y = w.heightAt(x, z), hx = q ? 1.25 : 0.35, hz = q ? 0.35 : 1.25; group(x, y, z, q ? 0 : Math.PI / 2); for (let i = 0; i < 3; i++) part(box(2.4, 0.3, 0.6), [0.62 - i * 0.03, 0.54, 0.38], (r() - 0.5) * 0.2, 0.15 + i * 0.3, 0); w.addBox({ x0: x - hx, x1: x + hx, z0: z - hz, z1: z + hz, y0: y - 0.2, y1: y + 0.95 }); };
   for (const t of w.towns) {
     const ny = t.type === 'ny', o = t.sw / 2 + 0.7;
@@ -276,6 +286,7 @@ export function buildCityProps(w) {
       if (r() < 0.07) { const bx = sx + (r() - 0.5) * 6, bz = sz + (r() - 0.5) * 6; (r() < 0.5 ? barrier : sandbags)(bx, bz, r() < 0.5); }
     }
   }
+  const sc = w.scene; instanceModel(sc, 'street_lamp_01', real.lamp); instanceModel(sc, 'fire_hydrant', real.hydrant); instanceModel(sc, 'metal_trash_can', real.trash); instanceModel(sc, 'concrete_road_barrier', real.barrier);
   if (!G.length) return;
   const mesh = new THREE.Mesh(mergeGeometries(G), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.35 }));
   mesh.castShadow = mesh.receiveShadow = true; w.scene.add(mesh);

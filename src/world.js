@@ -3,6 +3,7 @@ import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { buildCities, buildCityProps, NY_NAMES, LDN_NAMES } from './city.js';
 import { spawnVehicles } from './vehicles.js';
+import { ASSET, texOf } from './assets.js';
 
 export const MAP = 2000;
 export const HALF = MAP / 2;
@@ -203,11 +204,13 @@ export class World {
         const d = Math.hypot(x - t.x, z - t.z);
         if (d < t.r * 1.25) { tmp.setRGB(0.4 + nv * 0.04, 0.4 + nv * 0.04, 0.38); c.lerp(tmp, 1 - smooth(t.r * 0.85, t.r * 1.25, d)); }
       }
+      if (ASSET.img.leafy_grass_diff) c.multiplyScalar(1.85);
       col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
     }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     const detail = canvasTex(1024, (ctx, s) => { noiseFill(ctx, s, '#b8b8b8', 90, 40000, mulberry32(5)); const r = mulberry32(6); for (let i = 0; i < 1500; i++) { const lt = r() < 0.5 ? 255 : 0; ctx.fillStyle = `rgba(${lt},${lt},${lt},${0.1 + r() * 0.12})`; ctx.beginPath(); ctx.ellipse(r() * s, r() * s, 1 + r() * 4, 1 + r() * 3, r() * 3, 0, 6.3); ctx.fill(); } }, MAP / 9);
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, map: detail, bumpMap: detail, bumpScale: 1.2, roughness: 0.95, metalness: 0 });
+    const gm = texOf('leafy_grass_diff', MAP / 7), gn = texOf('leafy_grass_nor', MAP / 7, MAP / 7, false);
+    const mat = gm ? new THREE.MeshStandardMaterial({ vertexColors: true, map: gm, normalMap: gn, normalScale: new THREE.Vector2(1.1, 1.1), roughness: 0.95, metalness: 0 }) : new THREE.MeshStandardMaterial({ vertexColors: true, map: detail, bumpMap: detail, bumpScale: 1.2, roughness: 0.95, metalness: 0 });
     const mesh = new THREE.Mesh(g, mat); mesh.receiveShadow = true;
     this.scene.add(mesh); this.terrain = mesh;
   }
@@ -324,7 +327,8 @@ export class World {
       ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 6; ctx.strokeRect(3, 3, s - 6, s - 6);
       ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(s, s); ctx.moveTo(s, 0); ctx.lineTo(0, s); ctx.stroke();
     }, 0);
-    this.crateMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1.2, 0.9, 0.9), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7, metalness: 0.1 }), MAXC);
+    const cd = texOf('crate_diff'), cn = texOf('crate_nor', 1, 1, false);
+    this.crateMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1.2, 0.9, 0.9), cd ? new THREE.MeshStandardMaterial({ map: cd, normalMap: cn, roughness: 0.8, metalness: 0.05 }) : new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7, metalness: 0.1 }), MAXC);
     this.crateMesh.frustumCulled = false; this.crateMesh.castShadow = true; this.crateMesh.receiveShadow = true; this.crateMesh.count = 0;
     const bg = new THREE.CylinderGeometry(0.16, 0.16, 36, 8, 1, true); bg.translate(0, 18, 0);
     this.beamMesh = new THREE.InstancedMesh(bg, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }), MAXC);
