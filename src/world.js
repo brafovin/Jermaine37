@@ -70,17 +70,15 @@ export class World {
     this.cGrid = Array.from({ length: GN * GN }, () => []);
     this.crates = []; this.baseCrates = 0; this._stamp = 0;
     this.cageZone = null;
-    this.buildTerrainData();
-    this.buildSky();
-    this.buildTerrainMesh();
-    this.buildWater();
-    this.buildTowns();
-    this.buildNature();
-    this.buildProps();
-    this.buildCrateMeshes();
-    this.placeCrates();
-    spawnVehicles(this);
-    this.buildMapCanvas();
+  }
+  static async create(renderer, scene, q, seed, progress) { const w = new World(renderer, scene, q, seed); await w.build(progress); return w; }
+  // Aufbau in Etappen, damit der Browser dazwischen reagieren kann (kein Einfrieren, Ladebalken)
+  async build(progress) {
+    const stages = [['Gelände berechnen…', () => this.buildTerrainData()], ['Himmel & Licht…', () => this.buildSky()], ['Gelände modellieren…', () => this.buildTerrainMesh()], ['Wasser…', () => this.buildWater()],
+      ['Städte bauen…', () => this.buildTowns()], ['Vegetation pflanzen…', () => this.buildNature()], ['Straßen einrichten…', () => this.buildProps()], ['Kisten verteilen…', () => { this.buildCrateMeshes(); this.placeCrates(); }],
+      ['Fahrzeuge aufstellen…', () => spawnVehicles(this)], ['Karte zeichnen…', () => this.buildMapCanvas()]];
+    for (let i = 0; i < stages.length; i++) { progress && progress(stages[i][0], i / stages.length); await new Promise((r) => setTimeout(r, 30)); stages[i][1](); }
+    progress && progress('Fertig', 1);
   }
 
   // ---------- Höhenfeld ----------
@@ -428,13 +426,14 @@ export class World {
       const gi = this.gridIdx(ox + dx * s, oz + dz * s); if (gi < 0) continue;
       for (const i of this.bGrid[gi]) {
         if (seen.has(i)) continue; seen.add(i);
-        const b = this.boxes[i]; let tmin = 0, tmax = 1e9, ok = true;
+        const b = this.boxes[i]; let tmin = 0, tmax = 1e9, ok = true, ax = -1, sg = 1;
         const axes = [[ox, dx, b.x0, b.x1], [oy, dy, b.y0, b.y1], [oz, dz, b.z0, b.z1]];
-        for (const [o, d, lo, hi] of axes) {
+        for (let k = 0; k < 3; k++) {
+          const [o, d, lo, hi] = axes[k];
           if (Math.abs(d) < 1e-9) { if (o < lo || o > hi) { ok = false; break; } }
-          else { let t1 = (lo - o) / d, t2 = (hi - o) / d; if (t1 > t2) { const tt = t1; t1 = t2; t2 = tt; } if (t1 > tmin) tmin = t1; if (t2 < tmax) tmax = t2; if (tmin > tmax) { ok = false; break; } }
+          else { let t1 = (lo - o) / d, t2 = (hi - o) / d; if (t1 > t2) { const tt = t1; t1 = t2; t2 = tt; } if (t1 > tmin) { tmin = t1; ax = k; sg = d > 0 ? -1 : 1; } if (t2 < tmax) tmax = t2; if (tmin > tmax) { ok = false; break; } }
         }
-        if (ok && tmin < best) { best = tmin; kind = 1; }
+        if (ok && tmin < best) { best = tmin; kind = 1; this.lastN = ax === 0 ? [sg, 0, 0] : ax === 1 ? [0, sg, 0] : ax === 2 ? [0, 0, sg] : [0, 1, 0]; }
       }
     }
     let t = 0.5, prev = 0;
@@ -442,7 +441,7 @@ export class World {
       if (oy + dy * t < this.heightAt(ox + dx * t, oz + dz * t)) {
         let lo = prev, hi = t;
         for (let k = 0; k < 6; k++) { const m = (lo + hi) / 2; if (oy + dy * m < this.heightAt(ox + dx * m, oz + dz * m)) hi = m; else lo = m; }
-        if (hi < best) { best = hi; kind = 0; }
+        if (hi < best) { best = hi; kind = 0; const hx = ox + dx * hi, hz = oz + dz * hi, nx = this.heightAt(hx - 1, hz) - this.heightAt(hx + 1, hz), nz = this.heightAt(hx, hz - 1) - this.heightAt(hx, hz + 1), nl = Math.hypot(nx, 2, nz); this.lastN = [nx / nl, 2 / nl, nz / nl]; }
         break;
       }
       prev = t; t += 1 + t * 0.012;

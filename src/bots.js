@@ -51,7 +51,7 @@ export function installBots(Match) {
     this._zero = new THREE.Matrix4().makeScale(0, 0, 0);
   };
   P.disposeBots = function () {
-    if (this.actors) { for (const a of this.actors) this.scene.remove(a.root); this.actors = null; return; }
+    if (this.actors) { for (const a of this.actors) { this.scene.remove(a.root); a.root.traverse((o) => { if (o.material) o.material.dispose(); }); } this.actors = null; return; }
     for (const k in this.botMeshes) this.scene.remove(this.botMeshes[k]);
     this.botGeos.forEach((g) => g.dispose()); this.botMats.forEach((m) => m.dispose());
   };
@@ -135,7 +135,7 @@ export function installBots(Match) {
       const a = new THREE.Vector3(b.x, b.y + 1.4, b.z), t = new THREE.Vector3(tp.x + (hit ? 0 : (Math.random() - 0.5) * 3), tp.y + (hit ? 0 : (Math.random() - 0.5) * 2), tp.z + (hit ? 0 : (Math.random() - 0.5) * 3));
       if (w.rocket) { /* keine Raketen bei Bots */ } else this.tracer(a, t);
       const vol = clamp(1 - dp / 280, 0, 1), cam = this.camera, rel = new THREE.Vector3(b.x - cam.position.x, 0, b.z - cam.position.z).applyQuaternion(cam.quaternion.clone().invert());
-      this.audio.shot(w.cls, vol * vol * 0.9, clamp(rel.x / (Math.hypot(rel.x, rel.z) || 1), -1, 1));
+      this.audio.shot(w.cls, vol * vol * 0.9, clamp(rel.x / (Math.hypot(rel.x, rel.z) || 1), -1, 1), dp);
     }
     if (!hit) return;
     const dmg = w.dmg * pellets * mult * (w.rocket ? 0.6 : 1) * (e.isPlayer ? 0.55 : 0.1);
@@ -159,6 +159,7 @@ export function installBots(Match) {
     if (byPlayer) { p.kills++; p.cash += 100; this.audio.kill(); this.hud.toast(`<b>${b.name}</b> eliminiert <small>+$100</small>`, '#ff5a5a'); }
     else if (attacker && attacker.name) attacker.kills++;
     this.world.addCrate(b.x, b.z, 3, this.rollLoot(3, b), b.y);
+    if (this.fx) { const g = this.world.heightAt(b.x, b.z); this.fx.splat({ x: b.x, y: g, z: b.z }, [0, 1, 0], 1.5 + Math.random() * 0.8); this.fx.splat({ x: b.x + (Math.random() - 0.5), y: g, z: b.z + (Math.random() - 0.5) }, [0, 1, 0], 0.8 + Math.random() * 0.6); }
     if (this.alive <= 1 && p.alive && !this.over) this.win();
     else if (this.alive === 10 || this.alive === 5) this.hud.banner(`${this.alive} ÜBERLEBENDE`, '', 1800);
   };

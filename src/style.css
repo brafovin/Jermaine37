@@ -151,3 +151,4 @@ kbd{background:#2a343a;border:1px solid #556;padding:1px 8px;border-radius:3px;m
 #results .btn.big{margin-top:14px}
 
 #speedo{right:30px;bottom:210px;text-align:right;display:none}#speedo b{font-size:64px;line-height:1}#speedo span{font-size:20px;margin-left:6px;color:#cfd8dc}.vhp{width:160px;height:8px;background:#0009;border:1px solid #fff5;margin-left:auto;margin-top:4px}.vhp i{display:block;height:100%;background:linear-gradient(90deg,#d63a3a,#f4e63a)}
+#bloodfx{inset:0;overflow:hidden}.bl{position:absolute;opacity:.9;transition:opacity 4.5s ease-in;background-size:contain;background-repeat:no-repeat}

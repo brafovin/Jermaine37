@@ -72,3 +72,10 @@ Bots, Online-Spieler und der Soldat in der Lobby nutzen das geriggte Modell `pub
 ## Echte Assets (Poly Haven, CC0)
 
 Unter `public/assets/` liegen frei nutzbare CC0-Assets von [Poly Haven](https://polyhaven.com) (1k-Auflösung, ca. 45 MB): Texturen (Gras, Asphalt, Backstein, Sandstein, Kistenholz) und Modelle (Pistole, Repetiergewehr, Hydrant, Straßenlaterne, Mülleimer, Betonbarriere, Payphone, Reifen). Sie werden für Gelände, Straßen, Hausfassaden, Straßenmöbel, Beutekisten sowie die Pistolen (Sidekick, Magnum) und Scharfschützengewehre (Longshot, Phantom, Reaper) genutzt. Fehlen sie, greift das Spiel auf selbst erzeugte Texturen und Modelle zurück. Die übrigen Waffen sind weiterhin selbst gebaut, weil es dafür keine passenden freien Modelle gab.
+
+## Stabilität & Effekte
+
+- Die Karte wird in Etappen mit Fortschrittsanzeige aufgebaut, damit der Browser beim Laden nicht einfriert.
+- Dynamische Auflösung: ruckelt es, senkt das Spiel die Render-Auflösung automatisch und erhöht sie bei Reserve wieder. Fehler im Spiel-Loop werden abgefangen, das Spiel läuft weiter.
+- Schüsse: geschichteter Knall mit Hall, dumpferem Klang und Schallverzögerung bei Entfernung, Hülsen, Mündungsrauch und Einschusslöcher auf Wänden und Boden.
+- Treffer: Blutspritzer, Blutflecken auf Boden und Wänden, Blutlachen bei Kills und Blut auf dem Bildschirm, wenn man selbst getroffen wird.

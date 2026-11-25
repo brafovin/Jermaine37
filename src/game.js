@@ -7,6 +7,7 @@ import { badgeSVG } from './badges.js';
 import { installBots } from './bots.js';
 import { installVehicles } from './vehicles.js';
 import { installOnline } from './online.js';
+import { Effects } from './effects.js';
 
 const V3 = THREE.Vector3;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -35,6 +36,7 @@ export class Match {
     this.hud = new HUD(hudRoot);
     this.keys = new Set(); this.mouse = { l: false, r: false, dx: 0, dy: 0 };
     this.weaponModels = new Map(); this.curModel = null;
+    this._pr0 = renderer.getPixelRatio(); this._ft = 16; this._adapt = 0;
     this.initEffects();
     this.initState();
     this.initBots();
@@ -98,6 +100,7 @@ export class Match {
     const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.BufferAttribute(this.pPos, 3)); pg.setAttribute('color', new THREE.BufferAttribute(this.pCol, 3));
     this.points = new THREE.Points(pg, new THREE.PointsMaterial({ size: 0.16, vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false }));
     this.points.frustumCulled = false; this.scene.add(this.points);
+    this.fx = new Effects(this.scene, this.world, this.audio);
     this.projectiles = []; this.booms = [];
     this.rocketGeo = new THREE.CylinderGeometry(0.07, 0.07, 0.6, 8); this.rocketGeo.rotateX(Math.PI / 2);
     this.rocketMat = new THREE.MeshStandardMaterial({ color: 0x555a50, emissive: 0xff6a1a, emissiveIntensity: 0.8 });
@@ -115,6 +118,7 @@ export class Match {
     }
   }
   updateEffects(dt) {
+    this.fx.update(dt);
     for (const t of this.tracers) if (t.t > 0) { t.t -= dt; if (t.t <= 0) t.m.visible = false; else t.m.material.opacity = t.t / 0.07; }
     for (let i = 0; i < this.pN; i++) {
       if (this.pLife[i] <= 0) continue;
@@ -250,6 +254,11 @@ export class Match {
     const spread = THREE.MathUtils.degToRad(this.spreadNow());
     const origin = this.camera.position, fwd = this.tmpV.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
     const muzzleW = this.muzzleWorld();
+    if (!def.rocket) {
+      const right = new V3(1, 0, 0).applyQuaternion(this.camera.quaternion), up = new V3(0, 1, 0).applyQuaternion(this.camera.quaternion), fw = fwd.clone();
+      this.fx.casing(origin.clone().addScaledVector(fw, 0.4).addScaledVector(right, 0.17).addScaledVector(up, -0.1), right.multiplyScalar(1.6 + Math.random() * 1.4).addScaledVector(up, 1.2 + Math.random()).addScaledVector(fw, -0.2 + Math.random() * 0.5));
+      this.fx.smoke(muzzleW, fw);
+    }
     if (def.rocket) { this.launchRocket(origin, fwd, def); }
     else {
       for (let k = 0; k < def.pellets; k++) {
@@ -284,17 +293,36 @@ export class Match {
     if (hit.t > 3) { this.tracer(muzzle, end); this.netShot(muzzle, end, def); }
     if (hit.remote) {
       const dmg = def.dmg * this.falloff(hit.t, def.range) * (hit.head ? 1.9 : 1);
-      this.netHit(hit.remote, dmg, hit.head, def.name); this.hud.hitmarker(hit.head, false); this.audio.hit(hit.head); this.spark(end.x, end.y, end.z, 6, 0.9, 0.1, 0.1, 3, 0.4);
+      this.netHit(hit.remote, dmg, hit.head, def.name); this.hud.hitmarker(hit.head, false); this.audio.hit(hit.head); this.audio.flesh(); this.bloodHit(end, dir, hit.head, hit.remote.x, hit.remote.z);
     } else if (hit.bot) {
       const dmg = def.dmg * this.falloff(hit.t, def.range) * (hit.head ? 1.9 : 1) * (hit.t > def.range * 1.0 ? 0.6 : 1);
       const was = hit.bot.hp; this.damageBot(hit.bot, dmg, 'player', hit.head, def.name);
-      this.hud.hitmarker(hit.head, hit.bot.hp <= 0 && was > 0); this.audio.hit(hit.head);
-      this.spark(end.x, end.y, end.z, 6, 0.9, 0.1, 0.1, 3, 0.4);
-    } else if (hit.kind >= 0 && !hit.veh) this.spark(end.x, end.y, end.z, 5, 0.85, 0.8, 0.6, 3.5, 0.35);
+      this.hud.hitmarker(hit.head, hit.bot.hp <= 0 && was > 0); this.audio.hit(hit.head); this.audio.flesh();
+      this.bloodHit(end, dir, hit.head, hit.bot.x, hit.bot.z);
+    } else if (hit.kind >= 0 && !hit.veh) this.impact(end, hit);
+  }
+  impact(end, hit) {
+    const n = hit.normal || [0, 1, 0], bld = hit.kind === 1; this.fx.hole(end, n);
+    this.spark(end.x, end.y, end.z, bld ? 7 : 5, bld ? 0.78 : 0.5, bld ? 0.75 : 0.4, bld ? 0.7 : 0.28, 3, 0.5);
+    if (bld) this.spark(end.x, end.y, end.z, 3, 1, 0.85, 0.4, 5, 0.25);
+    if (Math.random() < 0.08) this.audio.ping();
+  }
+  bloodHit(end, dir, head, vx, vz) {
+    const n = head ? 26 : 14, R = Math.random;
+    for (let k = 0; k < n; k++) {
+      const i = this.pI++ % this.pN, sp = 2 + R() * (head ? 7 : 5);
+      this.pPos[i * 3] = end.x; this.pPos[i * 3 + 1] = end.y; this.pPos[i * 3 + 2] = end.z;
+      this.pVel[i * 3] = dir.x * sp + (R() - 0.5) * 2.5; this.pVel[i * 3 + 1] = dir.y * sp + R() * 2.2; this.pVel[i * 3 + 2] = dir.z * sp + (R() - 0.5) * 2.5;
+      this.pCol[i * 3] = 0.5 + R() * 0.35; this.pCol[i * 3 + 1] = 0.02; this.pCol[i * 3 + 2] = 0.02; this.pLife[i] = 0.6 + R() * 0.5;
+    }
+    const w = this.world;
+    if (R() < 0.8) this.fx.splat({ x: vx + (R() - 0.5) * 0.8, y: w.heightAt(vx, vz), z: vz + (R() - 0.5) * 0.8 }, [0, 1, 0], 0.5 + R() * 0.9);
+    const t = w.ray(end.x, end.y, end.z, dir.x, dir.y, dir.z, 5);
+    if (t > 0 && w.lastKind >= 0 && w.lastN) this.fx.splat({ x: end.x + dir.x * t, y: end.y + dir.y * t, z: end.z + dir.z * t }, w.lastN, 0.6 + R() * 1.0);
   }
   // Treffer auf Bots, Gebäude oder Gelände
   traceBullet(ox, oy, oz, dx, dy, dz, maxT, ignore = null) {
-    let tw = this.world.ray(ox, oy, oz, dx, dy, dz, maxT); const kind = this.world.lastKind;
+    let tw = this.world.ray(ox, oy, oz, dx, dy, dz, maxT); const kind = this.world.lastKind, wn = tw >= 0 && this.world.lastN ? this.world.lastN.slice() : null;
     let tmax = tw < 0 ? maxT : tw, best = tmax, bot = null, head = false;
     for (const b of this.bots) {
       if (!b.alive || !b.landed || b === ignore) continue;
@@ -313,7 +341,7 @@ export class Match {
       const y = oy + dy * t; if (y < b.y || y > b.y + 1.78) continue;
       best = t; remote = b; bot = null; head = y > b.y + 1.5;
     }
-    return { t: best, bot, remote, head, kind: bot || remote ? -2 : tw < 0 ? -1 : kind };
+    return { t: best, bot, remote, head, normal: wn, kind: bot || remote ? -2 : tw < 0 ? -1 : kind };
   }
   launchRocket(origin, dir, def) {
     const m = new THREE.Mesh(this.rocketGeo, this.rocketMat); m.position.copy(origin).addScaledVector(dir, 1.2); m.lookAt(m.position.clone().add(dir)); this.scene.add(m);
@@ -392,7 +420,7 @@ export class Match {
       const dx = srcPos.x - p.pos.x, dz = srcPos.z - p.pos.z, sy = Math.sin(p.yaw), cy = Math.cos(p.yaw);
       ang = Math.atan2(dx * cy - dz * sy, -dx * sy - dz * cy); // 0 = vorne, + = rechts
     }
-    this.hud.damage(ang); if (!this.hurtT) { this.audio.hurt(); this.hurtT = 0.25; }
+    this.hud.damage(ang); if (amount > 5) this.hud.bloodScreen(Math.min(3, amount / 14) * (Math.random() < 0.8 ? 1 : 0)); if (!this.hurtT) { this.audio.hurt(); this.hurtT = 0.25; }
     if (p.hp <= 0) this.die(srcName || 'Zone', weaponName || '', false);
   }
   die(killer, weapon, quit) {
@@ -430,7 +458,7 @@ export class Match {
     this.running = false; this.unbindInput(); this.scene.remove(this.zoneMesh);
     for (const t of this.tracers) this.scene.remove(t.m);
     this.scene.remove(this.points); for (const b of this.booms) this.scene.remove(b.m); for (const pr of this.projectiles) this.scene.remove(pr.m);
-    this.disposeBots(); this.disposeOnline(); this.hud.root.innerHTML = ''; this.onExit();
+    this.disposeBots(); this.disposeOnline(); this.fx.dispose(); this.renderer.setPixelRatio(this._pr0); this.renderer.setSize(innerWidth, innerHeight); this.hud.root.innerHTML = ''; this.onExit();
   }
 
   // ---------- Zone ----------
@@ -544,14 +572,21 @@ export class Match {
   loop(now) {
     if (!this.running) return;
     requestAnimationFrame(this.loop);
-    let dt = Math.min(0.05, (now - this.last) / 1000); this.last = now;
-    this.audio.frame();
-    if (!this.paused) {
-      dt *= this.timeScale;
-      const sub = Math.ceil(dt / 0.05);
-      for (let i = 0; i < sub; i++) this.step(dt / sub);
+    const raw = (now - this.last) / 1000; let dt = Math.min(0.05, raw); this.last = now;
+    // Dynamische Auflösung: bei Rucklern automatisch etwas weniger Pixel, bei Reserve wieder mehr
+    if (raw < 0.5) {
+      this._ft = this._ft * 0.94 + raw * 1000 * 0.06; this._adapt += raw;
+      if (this._adapt > 1.5) {
+        this._adapt = 0; const pr = this.renderer.getPixelRatio();
+        const set = (v) => { this.renderer.setPixelRatio(v); this.renderer.setSize(innerWidth, innerHeight); };
+        if (this._ft > 26 && pr > 0.55) set(Math.max(0.55, pr * 0.85)); else if (this._ft < 14.5 && pr < this._pr0 - 0.01) set(Math.min(this._pr0, pr * 1.08));
+      }
     }
-    this.renderFrame();
+    try {
+      this.audio.frame();
+      if (!this.paused) { dt *= this.timeScale; const sub = Math.ceil(dt / 0.05); for (let i = 0; i < sub; i++) this.step(dt / sub); }
+      this.renderFrame();
+    } catch (e) { if (!this._errT || now - this._errT > 3000) { console.error(e); this._errT = now; } this.renderer.autoClear = true; }
   }
   step(dt) {
     this.time += dt; this.hurtT = Math.max(0, (this.hurtT || 0) - dt);
@@ -568,9 +603,10 @@ export class Match {
     this.hud.setStats(this.alive, p.kills, Math.floor(p.cash)); this.hud.setHealth(p.hp, p.armor, p.medkits);
     this.hud.setCompass(p.yaw); this.refreshAmmo();
     const t = this.world.townAt(p.pos.x, p.pos.z, 1.3); this.hud.setLoc(t ? t.name.toUpperCase() : 'OFFENES GELÄNDE');
-    const pings = this.bots.filter((b) => b.alive && b.landed && b.ping > 0 && Math.hypot(b.x - p.pos.x, b.z - p.pos.z) < 220).concat(this.remotes ? [...this.remotes.values()].filter((r) => r.alive && r.ping > 0) : []);
-    const s = { x: p.pos.x, z: p.pos.z, yaw: p.yaw, zone: this.zone, world: this.world, pings };
-    if (!this._mmT || performance.now() - this._mmT > 50) { this._mmT = performance.now(); this.hud.drawMinimap(s); if (this.hud.bigMapOpen()) this.hud.drawBigMap(s); }
+    if (!this._mmT || performance.now() - this._mmT > 66) {
+      const pings = this.bots.filter((b) => b.alive && b.landed && b.ping > 0 && Math.hypot(b.x - p.pos.x, b.z - p.pos.z) < 220).concat(this.remotes ? [...this.remotes.values()].filter((r) => r.alive && r.ping > 0) : []);
+      const s = { x: p.pos.x, z: p.pos.z, yaw: p.yaw, zone: this.zone, world: this.world, pings };
+      this._mmT = performance.now(); this.hud.drawMinimap(s); if (this.hud.bigMapOpen()) this.hud.drawBigMap(s); }
   }
   renderFrame() {
     const r = this.renderer;

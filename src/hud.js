@@ -30,7 +30,7 @@ export class HUD {
     </div>
     <div class="hud-bc" id="h-slots"></div>
     <div class="hud-br"><div id="h-wname"></div><div class="ammo"><b id="h-mag">0</b><span id="h-res">/ 0</span></div><div id="h-reload"></div></div>
-    <div id="dmgflash"></div><div id="dmgdir"><i></i></div>
+    <div id="bloodfx"></div><div id="dmgflash"></div><div id="dmgdir"><i></i></div>
     <div id="scope"><div class="ring"></div><div class="hair h"></div><div class="hair v"></div></div>
     <div id="bigmap"><canvas id="bigmapc" width="900" height="900"></canvas><div class="bm-hint">M zum Schließen</div></div>
     <div id="pause"><div class="box"><h2>PAUSIERT</h2><p>Klicke ins Spiel, um fortzufahren</p><button class="btn" id="p-resume">Fortsetzen</button><button class="btn ghost" id="p-leave">Match verlassen</button></div></div>
@@ -81,6 +81,19 @@ export class HUD {
     if (angle !== null) { const d = this.el('dmgdir'); d.style.transform = `rotate(${angle}rad)`; d.style.opacity = 1; clearTimeout(this._dt); this._dt = setTimeout(() => (d.style.opacity = 0), 900); }
   }
   setSpeedo(t, hp) { const e = this.el('speedo'); if (t === null) { if (this._c.spd !== null) { this._c.spd = null; e.style.display = 'none'; } return; } this._c.spd = t; e.style.display = 'block'; this.set('h-spd', t); this.el('h-vhp').style.width = Math.max(0, hp) * 100 + '%'; }
+  bloodScreen(k) {
+    if (!this._bl) this._bl = [0, 1, 2].map((q) => { const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'); let sd = q * 31 + 7; const R = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+      x.fillStyle = 'rgba(120,6,6,.92)'; x.beginPath(); x.arc(128, 128, 26 + R() * 12, 0, 6.3); x.fill();
+      for (let i = 0; i < 30; i++) { const a = R() * 6.28, l = 30 + R() * 90, r = 2 + R() * 9; x.strokeStyle = 'rgba(105,5,5,.85)'; x.lineWidth = r * 0.7; x.lineCap = 'round'; x.beginPath(); x.moveTo(128, 128); x.lineTo(128 + Math.cos(a) * l, 128 + Math.sin(a) * l); x.stroke(); x.fillStyle = 'rgba(130,8,8,.9)'; x.beginPath(); x.arc(128 + Math.cos(a) * l, 128 + Math.sin(a) * l, r, 0, 6.3); x.fill(); }
+      return c.toDataURL(); });
+    const box = this.el('bloodfx');
+    for (let i = 0; i < Math.ceil(k); i++) {
+      const d = document.createElement('div'); d.className = 'bl'; const sz = 14 + Math.random() * 22;
+      d.style.cssText = `left:${Math.random() * 85}%;top:${Math.random() * 80}%;width:${sz}vw;height:${sz}vw;background-image:url(${this._bl[(Math.random() * 3) | 0]});transform:rotate(${Math.random() * 360}deg)`;
+      box.appendChild(d); requestAnimationFrame(() => requestAnimationFrame(() => { d.style.opacity = 0; })); setTimeout(() => d.remove(), 5200);
+    }
+    while (box.children.length > 9) box.firstChild.remove();
+  }
   setPrompt(t) { const p = this.el('prompt'); if (this._c.prompt !== t) { this._c.prompt = t; p.textContent = t; p.style.display = t ? 'block' : 'none'; } }
   setProgress(f) { const p = this.el('progress'); p.style.display = f > 0 ? 'block' : 'none'; p.firstChild.style.width = f * 100 + '%'; }
   setChute(t) { const c = this.el('chute'); if (this._c.chute !== t) { this._c.chute = t; c.innerHTML = t || ''; c.style.display = t ? 'block' : 'none'; } }

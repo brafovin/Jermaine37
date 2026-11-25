@@ -32,6 +32,7 @@ applyRes(); addEventListener('resize', applyRes);
 let gameScene = null;
 let world = null, match = null, busy = false;
 const $ = (id) => document.getElementById(id);
+const setLoad = (t, f = 0) => { const e = $('loading').querySelector('span'); if (e) e.textContent = t + (f ? ` (${Math.round(f * 100)} %)` : ''); };
 
 const lobby = new Lobby({ renderer, profile, audio, root: $('lobby'), onPlay: play, onQuality: applyRes });
 
@@ -47,7 +48,7 @@ async function play(mode) {
     await assetsP; await loadCharacter();
     if (world) { world.dispose(); world = null; }
     gameScene = new THREE.Scene();
-    world = new World(renderer, gameScene, qual(), (Math.random() * 1e9) | 0);
+    world = await World.create(renderer, gameScene, qual(), (Math.random() * 1e9) | 0, setLoad);
     $('mm').style.display = 'none'; $('mm').innerHTML = '';
     match = new Match({
       renderer, scene: gameScene, world, profile, audio, opts: { mode, players: res.players }, hudRoot: $('hud'),
@@ -87,7 +88,7 @@ function playOnline() {
     try {
       await assetsP; await loadCharacter();
       if (world) { world.dispose(); world = null; }
-      gameScene = new THREE.Scene(); world = new World(renderer, gameScene, qual(), m.seed);
+      gameScene = new THREE.Scene(); world = await World.create(renderer, gameScene, qual(), m.seed, setLoad);
       for (const v of world.vehicles) gameScene.remove(v.mesh); world.vehicles.length = 0;
       net.send({ t: 'ready' }); const e = $('loading').querySelector('span'); if (e) e.textContent = 'Warte auf andere Spieler…';
     } catch (err) { console.error(err); net.close(); $('loading').style.display = 'none'; lobby.start(); end(); }

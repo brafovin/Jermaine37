@@ -39,7 +39,7 @@ export function installOnline(Match) {
         const r = this.remotes.get(m.id); if (!r) return; r.ping = 1.5;
         const a = new THREE.Vector3(...m.o), b = new THREE.Vector3(...m.e); this.tracer(a, b);
         const cp = this.camera.position, d = Math.hypot(a.x - cp.x, a.z - cp.z), rel = new THREE.Vector3(a.x - cp.x, 0, a.z - cp.z).applyQuaternion(this.camera.quaternion.clone().invert());
-        const vol = clamp(1 - d / 300, 0, 1); this.audio.shot(m.cls, vol * vol, clamp(rel.x / (Math.hypot(rel.x, rel.z) || 1), -1, 1));
+        const vol = clamp(1 - d / 300, 0, 1); this.audio.shot(m.cls, vol * vol, clamp(rel.x / (Math.hypot(rel.x, rel.z) || 1), -1, 1), d);
       })
       .on('hit', (m) => {
         const r = this.remotes.get(m.from); this.lastHitBy = { id: m.from, name: r ? r.name : 'Gegner', w: m.w, t: this.time };
