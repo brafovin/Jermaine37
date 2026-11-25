@@ -5,17 +5,25 @@ import { HALF } from './world.js';
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const angDiff = (a, b) => { let d = b - a; while (d > Math.PI) d -= 6.2832; while (d < -Math.PI) d += 6.2832; return d; };
 
+const SKINS_T = [0xe0b08c, 0xc99b7a, 0x9a6b4a, 0x6b4630];
+const HAIR_T = [0x2a1a10, 0x4a2f1a, 0x7a5530, 0x111111, 0xb08040, 0x5a2a18];
+const BLUE_T = [0x1d5fb0, 0x1a529a, 0x2468b8, 0x1b5aa6];
 const PARTS = [
-  { k: 'torso', g: [0.46, 0.6, 0.26], c: 0xffffff, tint: true },
-  { k: 'head', g: [0.22, 0.24, 0.24], c: 0xd0a384 },
-  { k: 'helmet', g: [0.27, 0.12, 0.29], c: 0x2a2f2a },
-  { k: 'legL', g: [0.19, 0.8, 0.22], c: 0x3a3d33 },
-  { k: 'legR', g: [0.19, 0.8, 0.22], c: 0x3a3d33 },
-  { k: 'armL', g: [0.14, 0.55, 0.14], c: 0x4a4f3c },
-  { k: 'armR', g: [0.14, 0.55, 0.14], c: 0x4a4f3c },
+  { k: 'torso', g: [0.46, 0.56, 0.26], c: 0xffffff, tint: (b) => b.blue },
+  { k: 'stripe', g: [0.1, 0.5, 0.02], c: 0xe6c25a },
+  { k: 'belt', g: [0.48, 0.08, 0.28], c: 0xe6c25a },
+  { k: 'head', g: [0.22, 0.24, 0.24], c: 0xffffff, tint: (b) => b.skinC },
+  { k: 'hair', g: [0.25, 0.1, 0.27], c: 0xffffff, tint: (b) => b.hairC },
+  { k: 'hairB', g: [0.24, 0.3, 0.1], c: 0xffffff, tint: (b) => b.hairC },
+  { k: 'legL', g: [0.19, 0.8, 0.22], c: 0x1a529a },
+  { k: 'legR', g: [0.19, 0.8, 0.22], c: 0x1a529a },
+  { k: 'bootL', g: [0.2, 0.14, 0.28], c: 0x6b4528 },
+  { k: 'bootR', g: [0.2, 0.14, 0.28], c: 0x6b4528 },
+  { k: 'armL', g: [0.14, 0.55, 0.14], c: 0x1d5fb0 },
+  { k: 'armR', g: [0.14, 0.55, 0.14], c: 0x1d5fb0 },
+  { k: 'pip', g: [0.12, 0.14, 0.16], c: 0x7d8a82 },
   { k: 'gun', g: [0.07, 0.12, 0.7], c: 0x1b1d20 },
 ];
-const CAMO = [0x59623f, 0x6b5f45, 0x4a5560, 0x5d4a40, 0x3f4f3f, 0x6a6a5a, 0x4f4a64];
 
 export function installBots(Match) {
   const P = Match.prototype;
@@ -34,7 +42,7 @@ export function installBots(Match) {
         id: i, name: pl.name, rank: pl.rank, skill, x: pt[0], z: pt[1], y: this.world.heightAt(pt[0], pt[1]), yaw: this.rnd() * 6.28,
         hp: 100, armor: this.rnd() < 0.4 ? 25 : 0, w, mag: w.mag, alive: true, landed: false, landT: 3 + this.rnd() * 24, kills: 0,
         tx: pt[0], tz: pt[1], waitT: 0, enemy: null, scanT: this.rnd() * 0.4, react: 0, fireT: 0, burst: 4, strafe: 1, strafeT: 1, walk: this.rnd() * 6, accT: 0,
-        fall: 0, ping: 0, stuckT: 0, sx: pt[0], sz: pt[1], lootT: this.rnd(), reloadT: 0, moving: false, camo: CAMO[(this.rnd() * CAMO.length) | 0], first: true,
+        fall: 0, ping: 0, stuckT: 0, sx: pt[0], sz: pt[1], lootT: this.rnd(), reloadT: 0, moving: false, skinC: SKINS_T[(this.rnd() * 4) | 0], hairC: HAIR_T[(this.rnd() * HAIR_T.length) | 0], blue: BLUE_T[(this.rnd() * 4) | 0], first: true,
       });
     });
     this.player.isPlayer = true;
@@ -49,7 +57,7 @@ export function installBots(Match) {
       const geo = new THREE.BoxGeometry(...pt.g), mat = new THREE.MeshStandardMaterial({ color: pt.c, roughness: 0.85 });
       const im = new THREE.InstancedMesh(geo, mat, n); im.frustumCulled = false; im.castShadow = true; im.receiveShadow = true;
       this.scene.add(im); this.botMeshes[pt.k] = im; this.botGeos.push(geo); this.botMats.push(mat);
-      if (pt.tint) this.bots.forEach((b, i) => im.setColorAt(i, col.setHex(b.camo)));
+      if (pt.tint) this.bots.forEach((b, i) => im.setColorAt(i, col.setHex(pt.tint(b))));
     }
     this._m4 = new THREE.Matrix4(); this._l = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._p = new THREE.Vector3(); this._s = new THREE.Vector3(1, 1, 1); this._ax = new THREE.Vector3(1, 0, 0);
     this._zero = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -262,9 +270,12 @@ export function installBots(Match) {
       if (!b.alive) { qb.multiply(new THREE.Quaternion().setFromAxisAngle(ax, b.fall * 1.5)); }
       base.compose(pos, qb, s);
       const sw = b.moving ? Math.sin(b.walk) * 0.65 : 0, armF = b.enemy ? 1.35 : (b.moving ? 1.1 : 1.0);
-      setPart('torso', i, 0, 1.1, 0, 0, 0); setPart('head', i, 0, 1.55, 0, 0, 0); setPart('helmet', i, 0, 1.69, 0, 0, 0);
+      setPart('torso', i, 0, 1.12, 0, 0, 0); setPart('stripe', i, 0, 1.12, -0.135, 0, 0); setPart('belt', i, 0, 0.83, 0, 0, 0);
+      setPart('head', i, 0, 1.55, 0, 0, 0); setPart('hair', i, 0, 1.69, 0, 0, 0); setPart('hairB', i, 0, 1.55, 0.13, 0.1, 0);
       setPart('legL', i, -0.12, 0.82, 0, sw, -0.41); setPart('legR', i, 0.12, 0.82, 0, -sw, -0.41);
+      setPart('bootL', i, -0.12, 0.82, 0, sw, -0.74); setPart('bootR', i, 0.12, 0.82, 0, -sw, -0.74);
       setPart('armL', i, -0.3, 1.38, 0, armF - 0.1, -0.27); setPart('armR', i, 0.3, 1.38, 0, armF, -0.27);
+      setPart('pip', i, -0.37, 1.38, 0, armF - 0.1, -0.42);
       setPart('gun', i, 0.1, 1.12, -0.38, 0, 0);
     });
     for (const k in M) M[k].instanceMatrix.needsUpdate = true;

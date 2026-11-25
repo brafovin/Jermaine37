@@ -19,7 +19,7 @@ npm run build      # Produktions-Build nach dist/
 - **Kisten**: Waffen, Munition, Bargeld, Rüstung und Medkits (normal / selten / legendär). Besiegte Gegner hinterlassen eine Beutekiste. Bargeld wird nach dem Match zu Münzen.
 - **20 Waffen**: Pistole, Revolver, 3 MPs, 4 Sturmgewehre, 2 DMRs, 2 LMGs, 3 Schrotflinten, 3 Scharfschützengewehre, Raketenwerfer. Jede mit eigenen Werten (Schaden, Feuerrate, Magazin, Streuung, Rückstoß, Zoom, Seltenheit).
 - **Shop & Battle Pass**: 8 Waffen-Skins, 30 Stufen mit kostenloser und Premium-Spur, XP aus Matches.
-- **Grafik**: PBR-Materialien, Himmel mit Umgebungslicht, Sonnenschatten, Nebel, ACES-Tonemapping. Unter Einstellungen gibt es Niedrig / Mittel / Hoch / Ultra (Supersampling für hohe Auflösung).
+- **Grafik**: PBR-Materialien, Wüsten-Stadtkulisse (Sandstein-Häuser mit Bogenfenstern, Mauern, Autowracks, Fässer, Reifen, Sandsäcke, Strommasten), Himmel mit Umgebungslicht, Sonnenschatten, Nebel, ACES-Tonemapping. Unter Einstellungen gibt es Niedrig / Mittel / Hoch / Ultra (Supersampling für hohe Auflösung).
 
 ## Steuerung
 

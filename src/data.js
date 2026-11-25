@@ -88,7 +88,7 @@ export const WEAPON_BY_ID = Object.fromEntries(WEAPONS.map((w) => [w.id, w]));
 
 // ---------- Skins (Shop) ----------
 export const SKINS = [
-  { id: 'default', name: 'Standard', price: 0, rarity: 0, color: 0x3b3f45, accent: 0x23262a, emissive: 0x000000 },
+  { id: 'default', name: 'Wüsten-Camo', price: 0, rarity: 0, color: 0xc9761a, accent: 0x2a2216, emissive: 0x000000, camo: ['#c9761a', '#7a4e1c', '#1b1611'] },
   { id: 'desert', name: 'Wüstensand', price: 400, rarity: 1, color: 0xb99a63, accent: 0x7d6638, emissive: 0x000000 },
   { id: 'arctic', name: 'Arktis', price: 600, rarity: 1, color: 0xcfd8de, accent: 0x8fa1ad, emissive: 0x000000 },
   { id: 'toxic', name: 'Toxic', price: 900, rarity: 2, color: 0x2f3a2c, accent: 0x66ff3a, emissive: 0x1d8a00 },

@@ -4,10 +4,19 @@ const geoCache = new Map();
 function boxGeo(w, h, l) { const k = w + ',' + h + ',' + l; if (!geoCache.has(k)) geoCache.set(k, new THREE.BoxGeometry(w, h, l)); return geoCache.get(k); }
 function cylGeo(r, l, seg = 12) { const k = 'c' + r + ',' + l; if (!geoCache.has(k)) { const g = new THREE.CylinderGeometry(r, r, l, seg); g.rotateX(Math.PI / 2); geoCache.set(k, g); } return geoCache.get(k); }
 
+const camoCache = new Map();
+function camoTexture(skin) {
+  if (camoCache.has(skin.id)) return camoCache.get(skin.id);
+  const c = document.createElement('canvas'); c.width = c.height = 512; const x = c.getContext('2d'); let seed = 7; const R = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  x.fillStyle = skin.camo[0]; x.fillRect(0, 0, 512, 512);
+  for (const [col, n] of [[skin.camo[1], 40], [skin.camo[2], 26]]) { x.fillStyle = col; for (let i = 0; i < n; i++) { x.beginPath(); const px = R() * 512, py = R() * 512, rx = 20 + R() * 60, ry = 10 + R() * 30, rot = R() * 3; x.ellipse(px, py, rx, ry, rot, 0, 6.3); x.fill(); } }
+  for (let i = 0; i < 9000; i++) { x.fillStyle = `rgba(${R() < 0.5 ? 255 : 0},${R() < 0.5 ? 220 : 0},${R() < 0.5 ? 160 : 0},${R() * 0.18})`; x.fillRect(R() * 512, R() * 512, 1 + R() * 2, 1 + R() * 2); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16; t.wrapS = t.wrapT = THREE.RepeatWrapping; camoCache.set(skin.id, t); return t;
+}
 export function skinMaterials(skin) {
   const glow = skin.emissive > 0;
   return {
-    body: new THREE.MeshStandardMaterial({ color: skin.color, metalness: 0.55, roughness: 0.38 }),
+    body: skin.camo ? new THREE.MeshStandardMaterial({ map: camoTexture(skin), color: 0xffffff, metalness: 0.45, roughness: 0.4 }) : new THREE.MeshStandardMaterial({ color: skin.color, metalness: 0.55, roughness: 0.38 }),
     accent: new THREE.MeshStandardMaterial({ color: skin.accent, metalness: 0.4, roughness: 0.35, emissive: skin.emissive, emissiveIntensity: glow ? 1.4 : 0 }),
     dark: new THREE.MeshStandardMaterial({ color: 0x17191d, metalness: 0.7, roughness: 0.45 }),
     glass: new THREE.MeshStandardMaterial({ color: 0x66d0ff, metalness: 0.1, roughness: 0.05, transparent: true, opacity: 0.35, emissive: 0x2a8acc, emissiveIntensity: 0.6 }),
@@ -28,6 +37,10 @@ export function makeWeaponModel(def, skin, withArms = true) {
     B(0.03, Math.max(0.01, y - w / 2 - 0.045), 0.03, m.dark, 0, (y - w / 2 + 0.045) / 2, z + 0.005);
     B(0.004, 0.004, 0.004, m.accent, 0, y, z - 0.01);
   };
+  const railZ = (zFront, zBack, y, w = 0.03) => { for (let z = zFront; z <= zBack; z += 0.026) B(w, 0.012, 0.013, m.dark, 0, y, z); B(w * 0.6, 0.008, zBack - zFront, m.dark, 0, y - 0.004, (zFront + zBack) / 2); };
+  const brake = (z) => { C(0.024, 0.07, m.dark, 0, 0.008, z); C(0.027, 0.012, m.accent, 0, 0.008, z + 0.03); C(0.027, 0.012, m.accent, 0, 0.008, z - 0.03); B(0.06, 0.012, 0.02, m.dark, 0, 0.008, z); };
+  const vgrip = (z, y = -0.07) => { B(0.032, 0.09, 0.034, m.dark, 0, y - 0.04, z, 0.1); B(0.036, 0.012, 0.04, m.accent, 0, y - 0.088, z, 0.1); };
+  const magAng = (z, h = 0.16) => { B(0.04, h, 0.07, m.dark, 0, -0.09 - h / 2 + 0.03, z, 0.18); B(0.045, 0.02, 0.078, m.accent, 0, -0.09 - h + 0.03, z + 0.03, 0.18); };
   let muzzleZ = -0.5, sightY = 0.1, handZ = -0.3, gripZ = 0.05;
   switch (def.model) {
     case 'pistol':
@@ -36,7 +49,7 @@ export function makeWeaponModel(def, skin, withArms = true) {
       B(0.012, 0.012, 0.012, m.accent, 0, 0.075, -0.2); muzzleZ = -0.23; sightY = 0.075; handZ = -0.02; gripZ = 0.0;
       break;
     case 'smg':
-      B(0.06, 0.08, 0.34, m.body, 0, 0, -0.1); B(0.062, 0.012, 0.3, m.accent, 0, 0.046, -0.1);
+      B(0.06, 0.08, 0.34, m.body, 0, 0, -0.1); B(0.062, 0.012, 0.3, m.accent, 0, 0.046, -0.1); railZ(-0.24, 0.0, 0.053, 0.025); brake(-0.48); vgrip(-0.28);
       C(0.014, 0.2, m.dark, 0, 0.01, -0.36); B(0.036, 0.15, 0.05, m.dark, 0, -0.11, -0.08, 0.1);
       B(0.04, 0.1, 0.05, m.dark, 0, -0.09, 0.05, -0.25); B(0.04, 0.06, 0.2, m.body, 0, -0.01, 0.26);
       redDot(0.1, -0.1, 0.04);
@@ -48,13 +61,14 @@ export function makeWeaponModel(def, skin, withArms = true) {
       B(0.075, 0.075, 0.3, m.body, 0, -0.004, -0.45); B(0.077, 0.014, 0.3, m.accent, 0, 0.04, -0.45);
       C(0.014, 0.28 + L, m.dark, 0, 0.005, -0.74 - L / 2); B(0.04, 0.16, 0.07, m.dark, 0, -0.12, -0.1, 0.15);
       B(0.04, 0.1, 0.05, m.dark, 0, -0.1, 0.08, -0.25); B(0.055, 0.09, 0.28, m.body, 0, -0.015, 0.3);
+      railZ(-0.58, -0.04, 0.056); railZ(-0.62, -0.3, 0.042, 0.02); brake(-0.88 - L); if (def.model === 'ar') vgrip(-0.52); B(0.03, 0.03, 0.05, m.accent, 0.04, 0.0, -0.3); B(0.07, 0.02, 0.12, m.dark, 0, 0.03, 0.14); C(0.02, 0.2, m.dark, 0, 0.0, 0.2);
       if (def.model === 'dmr') { C(0.026, 0.22, m.dark, 0, 0.1, -0.12); C(0.03, 0.03, m.glass, 0, 0.1, -0.235); sightY = 0.1; }
       else { redDot(0.115, -0.14); sightY = 0.115; }
       muzzleZ = -0.88 - L; handZ = -0.5; gripZ = 0.08;
       break;
     }
     case 'lmg':
-      B(0.085, 0.11, 0.5, m.body, 0, 0, -0.1); B(0.087, 0.016, 0.5, m.accent, 0, 0.063, -0.1);
+      B(0.085, 0.11, 0.5, m.body, 0, 0, -0.1); B(0.087, 0.016, 0.5, m.accent, 0, 0.063, -0.1); railZ(-0.34, 0.1, 0.075, 0.035); brake(-1.0); vgrip(-0.62);
       B(0.09, 0.09, 0.34, m.body, 0, -0.01, -0.54); C(0.017, 0.3, m.dark, 0, 0.01, -0.86);
       B(0.12, 0.13, 0.12, m.dark, 0, -0.13, -0.05); B(0.09, 0.07, 0.1, m.accent, 0, -0.12, -0.05);
       B(0.04, 0.1, 0.05, m.dark, 0, -0.1, 0.12, -0.25); B(0.06, 0.1, 0.3, m.body, 0, -0.02, 0.36);
@@ -69,7 +83,7 @@ export function makeWeaponModel(def, skin, withArms = true) {
       B(0.012, 0.02, 0.012, m.accent, 0, 0.055, -0.85); muzzleZ = -0.88; sightY = 0.065; handZ = -0.45; gripZ = 0.07;
       break;
     case 'sniper':
-      B(0.062, 0.09, 0.42, m.body, 0, 0, -0.08); B(0.064, 0.012, 0.42, m.accent, 0, 0.052, -0.08);
+      B(0.062, 0.09, 0.42, m.body, 0, 0, -0.08); B(0.064, 0.012, 0.42, m.accent, 0, 0.052, -0.08); railZ(-0.28, 0.1, 0.056, 0.026);
       C(0.018, 0.78, m.dark, 0, 0.012, -0.7); C(0.028, 0.08, m.dark, 0, 0.012, -1.12);
       C(0.034, 0.32, m.dark, 0, 0.115, -0.1); C(0.044, 0.07, m.dark, 0, 0.115, -0.28); C(0.044, 0.07, m.dark, 0, 0.115, 0.06); C(0.032, 0.01, m.glass, 0, 0.115, -0.3);
       B(0.045, 0.1, 0.04, m.dark, 0, -0.1, 0.06, -0.25); B(0.058, 0.12, 0.34, m.body, 0, -0.025, 0.32);
@@ -104,32 +118,34 @@ export function flashTexture() {
   return new THREE.CanvasTexture(c);
 }
 
-// Soldat für die Lobby (schaut nach +Z, hält die Waffe aufrecht)
+// Soldat für die Lobby (schaut nach +Z, hält die Waffe aufrecht) – blauer Vault-Anzug mit gelben Streifen
 export function makeSoldier(skin, def) {
   const g = new THREE.Group();
-  const cloth = new THREE.MeshStandardMaterial({ color: 0x5b5540, roughness: 0.95 });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x2b2a22, roughness: 0.9 });
-  const vest = new THREE.MeshStandardMaterial({ color: 0x4a4636, roughness: 0.85 });
-  const pouch = new THREE.MeshStandardMaterial({ color: 0x6b6446, roughness: 0.9 });
-  const white = new THREE.MeshStandardMaterial({ color: 0xe8e8e0, roughness: 0.6 });
-  const glass = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.1, metalness: 0.8 });
-  const add = (geo, mat, x, y, z, parent = g) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); o.castShadow = true; parent.add(o); return o; };
-  add(boxGeo(0.2, 0.85, 0.24), cloth, -0.13, 0.43, 0); add(boxGeo(0.2, 0.85, 0.24), cloth, 0.13, 0.43, 0);
-  add(boxGeo(0.22, 0.2, 0.34), dark, -0.13, 0.05, 0.05); add(boxGeo(0.22, 0.2, 0.34), dark, 0.13, 0.05, 0.05);
-  add(boxGeo(0.5, 0.28, 0.3), cloth, 0, 0.98, 0);
-  add(boxGeo(0.56, 0.5, 0.34), vest, 0, 1.3, 0);
-  for (let i = -1; i <= 1; i++) add(boxGeo(0.12, 0.14, 0.08), pouch, i * 0.15, 1.2, 0.2);
-  add(boxGeo(0.14, 0.1, 0.14), cloth, 0, 1.6, 0);
-  add(boxGeo(0.24, 0.26, 0.26), white, 0, 1.78, 0);
-  add(boxGeo(0.28, 0.08, 0.28), dark, 0, 1.93, 0); add(boxGeo(0.3, 0.14, 0.3), dark, 0, 1.88, -0.02);
-  add(boxGeo(0.26, 0.07, 0.04), glass, 0, 1.82, 0.14);
-  add(boxGeo(0.07, 0.2, 0.06), dark, 0.16, 1.86, 0); // Headset
-  add(boxGeo(0.16, 0.5, 0.18), cloth, -0.37, 1.25, 0.02).rotation.z = 0.12;
+  const std = (c, r = 0.8, m = 0) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m });
+  const blue = std(0x1d5fb0, 0.7), blueD = std(0x174b8c, 0.75), yellow = std(0xe6c25a, 0.6), brown = std(0x6b4528, 0.85), skinM = std(0xc99b7a, 0.7), hair = std(0x3a2418, 0.6), dev = std(0x7d8a82, 0.5, 0.5), eye = std(0x1a1210, 0.4);
+  const screen = new THREE.MeshStandardMaterial({ color: 0x113322, emissive: 0x39ff6a, emissiveIntensity: 1.2 });
+  const add = (geo, mat, x, y, z, rx = 0, rz = 0) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); o.rotation.set(rx, 0, rz); o.castShadow = true; g.add(o); return o; };
+  add(boxGeo(0.2, 0.85, 0.24), blue, -0.12, 0.45, 0); add(boxGeo(0.2, 0.85, 0.24), blue, 0.12, 0.45, 0);
+  add(boxGeo(0.22, 0.2, 0.36), brown, -0.12, 0.08, 0.05); add(boxGeo(0.22, 0.2, 0.36), brown, 0.12, 0.08, 0.05);
+  add(boxGeo(0.54, 0.1, 0.32), yellow, 0, 0.98, 0); add(boxGeo(0.52, 0.22, 0.3), blue, 0, 1.12, 0);
+  add(boxGeo(0.5, 0.52, 0.3), blue, 0, 1.42, 0);
+  add(boxGeo(0.06, 0.5, 0.02), yellow, -0.1, 1.42, 0.16, 0, 0.1); add(boxGeo(0.06, 0.5, 0.02), yellow, 0.1, 1.42, 0.16, 0, -0.1);
+  add(boxGeo(0.16, 0.06, 0.2), yellow, 0, 1.7, 0.02); add(boxGeo(0.08, 0.1, 0.08), skinM, 0, 1.74, 0);
+  add(boxGeo(0.22, 0.26, 0.24), skinM, 0, 1.92, 0.01);
+  add(boxGeo(0.25, 0.09, 0.27), hair, 0, 2.08, 0); add(boxGeo(0.26, 0.28, 0.1), hair, 0, 1.94, -0.12); add(boxGeo(0.08, 0.34, 0.08), hair, 0, 1.76, -0.2, 0.15);
+  add(boxGeo(0.04, 0.03, 0.02), eye, -0.06, 1.95, 0.125); add(boxGeo(0.04, 0.03, 0.02), eye, 0.06, 1.95, 0.125); add(boxGeo(0.07, 0.015, 0.02), std(0x9a5a4a), 0, 1.86, 0.125);
+  // linker Arm hängt, mit Armgerät
+  add(boxGeo(0.15, 0.55, 0.16), blue, -0.35, 1.38, 0.02, 0, 0.1);
+  add(boxGeo(0.17, 0.08, 0.18), brown, -0.35, 1.52, 0.02, 0, 0.1);
+  add(boxGeo(0.14, 0.4, 0.15), blueD, -0.37, 0.98, 0.04); add(boxGeo(0.16, 0.1, 0.16), brown, -0.37, 0.9, 0.04);
+  add(boxGeo(0.12, 0.2, 0.2), dev, -0.4, 0.98, 0.12); add(boxGeo(0.1, 0.14, 0.02), screen, -0.4, 0.98, 0.225);
+  add(boxGeo(0.1, 0.1, 0.1), skinM, -0.37, 0.76, 0.04);
+  // rechter Arm hält Waffe
   const w = makeWeaponModel(def, skin, false); w.scale.setScalar(1.1);
-  w.position.set(0.42, 1.2, 0.32); w.rotation.set(Math.PI / 2 + 0.05, 0, 0); g.add(w);
-  const ra = add(boxGeo(0.16, 0.34, 0.16), cloth, 0.38, 1.28, 0.12); ra.rotation.x = -0.6;
-  const fa = add(boxGeo(0.15, 0.4, 0.15), cloth, 0.34, 1.12, 0.3); fa.rotation.x = -1.2;
-  add(boxGeo(0.12, 0.12, 0.12), dark, 0.3, 1.12, 0.34);
-  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  w.position.set(0.42, 1.2, 0.34); w.rotation.set(Math.PI / 2 + 0.05, 0, 0); g.add(w);
+  const ra = add(boxGeo(0.16, 0.34, 0.16), blue, 0.38, 1.4, 0.12); ra.rotation.x = -0.6;
+  add(boxGeo(0.17, 0.07, 0.18), brown, 0.38, 1.5, 0.1).rotation.x = -0.6;
+  const fa = add(boxGeo(0.15, 0.4, 0.15), blueD, 0.4, 1.22, 0.32); fa.rotation.x = -1.2;
+  add(boxGeo(0.12, 0.12, 0.12), skinM, 0.42, 1.2, 0.4);
   return g;
 }
