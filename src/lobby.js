@@ -47,7 +47,7 @@ export class Lobby {
       if (!this.active) return; requestAnimationFrame(loop);
       const dt = Math.min(0.05, (t - this.last) / 1000); this.last = t;
       const time = t / 1000;
-      this.soldierHolder.rotation.y = this.rotY + Math.sin(time * 0.4) * 0.08; this.soldier.userData.update(time);
+      this.soldierHolder.rotation.y = this.rotY + Math.sin(time * 0.4) * 0.08 + (this.soldier.userData.actor ? Math.PI : 0); this.soldier.userData.update(time, dt);
       this.renderer.autoClear = true; this.renderer.render(this.scene, this.cam);
     };
     requestAnimationFrame(loop);

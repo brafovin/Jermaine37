@@ -5,6 +5,8 @@ import { HALF } from './world.js';
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const angDiff = (a, b) => { let d = b - a; while (d > Math.PI) d -= 6.2832; while (d < -Math.PI) d += 6.2832; return d; };
 
+import { characterReady, Actor } from './character.js';
+import { flatWeapon } from './weaponmodel.js';
 import { HUMAN_PARTS, randomOutfit, roleColor, poseHuman, roleTex, roleRough } from './human.js';
 
 export function installBots(Match) {
@@ -33,6 +35,10 @@ export function installBots(Match) {
   };
 
   P.initBotMeshes = function () {
+    if (characterReady()) {
+      this.actors = this.bots.map((b, i) => { const a = new Actor(i + 3); a.root.visible = false; a.root.rotation.order = 'YXZ'; a.attachWeapon(flatWeapon(b.w)); a.wid = b.w.id; this.scene.add(a.root); b.lx = b.x; b.lz = b.z; b.sp = 0; return a; });
+      this.botMeshes = {}; this.botGeos = []; this.botMats = []; this._zero = new THREE.Matrix4().makeScale(0, 0, 0); return;
+    }
     const n = this.bots.length; this.botMeshes = {}; this.botGeos = []; this.botMats = [];
     const col = new THREE.Color();
     for (const pt of HUMAN_PARTS) {
@@ -45,6 +51,7 @@ export function installBots(Match) {
     this._zero = new THREE.Matrix4().makeScale(0, 0, 0);
   };
   P.disposeBots = function () {
+    if (this.actors) { for (const a of this.actors) this.scene.remove(a.root); this.actors = null; return; }
     for (const k in this.botMeshes) this.scene.remove(this.botMeshes[k]);
     this.botGeos.forEach((g) => g.dispose()); this.botMats.forEach((m) => m.dispose());
   };
@@ -234,10 +241,23 @@ export function installBots(Match) {
       b.accT += dt; const need = dp > 260 ? 0.4 : dp > 130 ? 0.1 : 0; if (b.accT < need) continue;
       const d = b.accT; b.accT = 0; this.botThink(b, d, dp);
     }
-    this.renderBots();
+    this.renderBots(dt);
   };
 
-  P.renderBots = function () {
+  P.renderBots = function (dt = 0.016) {
+    if (this.actors) {
+      const cp = this.camera.position;
+      this.bots.forEach((b, i) => {
+        const a = this.actors[i], dist = Math.hypot(b.x - cp.x, b.z - cp.z);
+        const vis = b.landed && dist < 430 && (b.alive || !(b.fall >= 1 && this.time - (b.deadAt || (b.deadAt = this.time)) > 4));
+        a.root.visible = vis; if (!vis) return;
+        if (a.wid !== b.w.id) { a.wid = b.w.id; if (a.weapon) { a.weapon.clear(); a.weapon.add(flatWeapon(b.w)); } }
+        a.root.position.set(b.x, b.y, b.z); a.root.rotation.y = b.yaw; a.root.rotation.x = b.alive ? 0 : -b.fall * 1.5;
+        const sp = Math.hypot(b.x - b.lx, b.z - b.lz) / Math.max(dt, 1e-3); b.lx = b.x; b.lz = b.z; b.sp += (Math.min(sp, 9) - b.sp) * Math.min(1, dt * 6);
+        if (b.alive && dist < 170) a.update(dt, b.sp);
+      });
+      return;
+    }
     const M = this.botMeshes, base = this._m4, q = this._q, pos = this._p, sc = this._s, ax = this._ax, cp = this.camera.position;
     const yAx = this._yAx || (this._yAx = new THREE.Vector3(0, 1, 0)), qb = this._qb || (this._qb = new THREE.Quaternion()), qf = this._qf || (this._qf = new THREE.Quaternion());
     let idx = 0; const emit = (k, mat) => M[k].setMatrixAt(idx, mat);

@@ -64,3 +64,7 @@ npm run online
 Einstellbar per Umgebungsvariablen: `PORT`, `MIN_PLAYERS`, `MAX_PLAYERS`, `WAIT_SEC`, z. B. `MIN_PLAYERS=1 npm run online` zum Testen allein. Läuft das Spiel über den Vite-Entwicklungsserver (Port 5173), startet man den Server separat mit `npm run server`. Eine abweichende Server-Adresse trägt man unter Einstellungen ein.
 
 Im Online-Modus gibt es keine Bots und keine Fahrzeuge. Zone, Kisten und Karte sind für alle gleich, Spieler sehen und treffen sich gegenseitig, Kisten werden geteilt, Gefallene lassen eine Beutekiste zurück. Treffer werden vom Schützen berechnet (kein Anti-Cheat), das passt für Freunde und LAN, nicht für ein öffentliches Spiel.
+
+## Charaktermodell
+
+Bots, Online-Spieler und der Soldat in der Lobby nutzen das geriggte Modell `public/models/Soldier.glb` (aus den three.js-Beispielen, ursprünglich von Mixamo) mit Idle-/Geh-/Lauf-Animationen. Lädt es nicht, greift die prozedurale Menschenfigur als Rückfall. Prüfe vor einer Veröffentlichung die Lizenz der Datei (Mixamo/three.js-Beispielassets) oder ersetze sie durch ein eigenes Modell mit Knochen `mixamorig*` und Animationen `Idle`, `Walk`, `Run`.

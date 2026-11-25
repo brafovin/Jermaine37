@@ -7,6 +7,7 @@ import { Match } from './game.js';
 import { World } from './world.js';
 import { WEAPON_BY_ID } from './data.js';
 import { Net } from './net.js';
+import { loadCharacter } from './character.js';
 
 const dpr = window.devicePixelRatio || 1;
 export const QUALITY = {
@@ -55,6 +56,7 @@ async function play(mode) {
   $('loading').style.display = 'none';
 }
 
+loadCharacter().then((g) => { if (g) lobby.rebuildSoldier(); });
 window.__br = { profile, play, lobby, W: WEAPON_BY_ID, get world() { return world; } };
 lobby.start();
 

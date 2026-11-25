@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { WEAPON_BY_ID } from './data.js';
 import { makeHumanGroup, randomOutfit } from './human.js';
+import { characterReady, Actor } from './character.js';
+import { flatWeapon } from './weaponmodel.js';
 import { mulberry32 } from './world.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -23,10 +25,13 @@ export function installOnline(Match) {
     this.net = on.net; this.myId = on.you; this.netT = 0; this.lastHitBy = null; this.alive = on.players.length;
     for (const pl of on.players) {
       if (pl.id === on.you) continue;
-      const outfit = randomOutfit(mulberry32(on.seed + pl.id * 131)), group = makeHumanGroup(outfit, false); group.add(nameSprite(pl.name));
+      let actor = null, group, outfit = null;
+      if (characterReady()) { actor = new Actor(pl.id); group = new THREE.Group(); group.add(actor.root); actor.attachWeapon(flatWeapon(WEAPON_BY_ID.sidekick)); }
+      else { outfit = randomOutfit(mulberry32(on.seed + pl.id * 131)); group = makeHumanGroup(outfit, false); }
+      group.add(nameSprite(pl.name));
       const [sx, sz] = this.spawnPos(pl.index, on.count);
       group.position.set(sx, 300, sz); this.scene.add(group);
-      this.remotes.set(pl.id, { id: pl.id, name: pl.name, rank: pl.rank, group, outfit, x: sx, y: 300, z: sz, tx: sx, ty: 300, tz: sz, yaw: 0, tyaw: 0, pitch: 0, walk: 0, moving: false, aim: 0.7, w: 'sidekick', alive: true, ping: 0, st: 'fall', t: 0 });
+      this.remotes.set(pl.id, { id: pl.id, name: pl.name, rank: pl.rank, group, outfit, actor, wid: 'sidekick', x: sx, y: 300, z: sz, tx: sx, ty: 300, tz: sz, yaw: 0, tyaw: 0, pitch: 0, walk: 0, moving: false, aim: 0.7, w: 'sidekick', alive: true, ping: 0, st: 'fall', t: 0 });
     }
     const n = this.net;
     n.on('s', (m) => { const r = this.remotes.get(m.id); if (!r) return; r.tx = m.x; r.ty = m.y; r.tz = m.z; r.tyaw = m.yaw; r.pitch = m.p; r.st = m.st; r.aim = 0.6 + (m.a || 0) * 0.4; r.w = m.w; r.crouch = m.c; })
@@ -92,7 +97,10 @@ export function installOnline(Match) {
       r.x += (r.tx - r.x) * k; r.y += (r.ty - r.y) * k; r.z += (r.tz - r.z) * k; r.yaw = lerpAng(r.yaw, r.tyaw, k);
       const sp = Math.hypot(r.x - ox, r.z - oz) / Math.max(dt, 1e-4); r.moving = sp > 0.6 && r.st !== 'fall'; if (r.moving) r.walk += sp * dt * 1.3;
       r.group.position.set(r.x, r.y, r.z); r.group.rotation.y = r.yaw;
-      r.group.userData.pose({ walk: r.walk, moving: r.moving, aim: r.st === 'fall' ? 0.2 : r.aim, t: r.t });
+      if (r.actor) {
+        r.group.rotation.y = r.yaw; r.actor.update(dt, r.moving ? Math.min(sp, 9) : 0);
+        if (r.wid !== r.w && WEAPON_BY_ID[r.w] && r.actor.weapon) { r.wid = r.w; r.actor.weapon.clear(); r.actor.weapon.add(flatWeapon(WEAPON_BY_ID[r.w])); }
+      } else r.group.userData.pose({ walk: r.walk, moving: r.moving, aim: r.st === 'fall' ? 0.2 : r.aim, t: r.t });
       r.x = Number.isFinite(r.x) ? r.x : 0;
     }
   };

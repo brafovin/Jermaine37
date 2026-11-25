@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { SKIN_BY_ID } from './data.js';
 
 const geoCache = new Map();
 function boxGeo(w, h, l) { const k = w + ',' + h + ',' + l; if (!geoCache.has(k)) geoCache.set(k, new THREE.BoxGeometry(w, h, l)); return geoCache.get(k); }
@@ -120,7 +122,12 @@ export function flashTexture() {
 
 // Soldat für die Lobby: menschliche Figur mit Waffe in der Hand
 import { makeHumanGroup, randomOutfit } from './human.js';
+import { characterReady, Actor } from './character.js';
 export function makeSoldier(skin, def) {
+  if (characterReady()) {
+    const a = new Actor(0), root = new THREE.Group(); root.add(a.root); a.attachWeapon(flatWeapon(def), window.__wcfg || {});
+    root.userData.update = (t, dt) => a.update(dt || 0.016, 0); root.userData.actor = a; return root;
+  }
   const outfit = { skin: 0xd9a47e, hair: 0x3a2416, jacket: 0x4a5236, collar: 0x3a412a, pants: 0x2a2f38, vest: 0x1b1d20, shoe: 0x1c1a18, belt: 0x2a2218, cap: null, helmet: null, pack: null, pony: false, glove: 0x1a1a1a, dark: 0x0a0806, white: 0xf2efe8, iris: 0x2a4a6a, lips: 0xb06a58 };
   const h = makeHumanGroup(outfit, true);
   h.userData.pose({ walk: 0, moving: false, aim: 0.85, t: 0 });
@@ -128,4 +135,21 @@ export function makeSoldier(skin, def) {
   const root = new THREE.Group(); h.rotation.y = Math.PI; root.add(h);
   root.userData.update = (t) => h.userData.pose({ walk: 0, moving: false, aim: 0.85, t });
   return root;
+}
+
+// Waffe als EIN Mesh (für viele Bots): alle Teile mit Vertexfarben verschmolzen
+const flatCache = new Map();
+export function flatWeapon(def) {
+  if (!flatCache.has(def.id)) {
+    const skin = SKIN_BY_ID.default, m = makeWeaponModel(def, skin, false); m.updateMatrixWorld(true); const geos = [], col = new THREE.Color();
+    m.traverse((o) => {
+      if (!o.isMesh) return;
+      const g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld);
+      const ng = g.index ? g.toNonIndexed() : g; col.copy(o.material.color); if (o.material.map) col.setHex(skin.color);
+      const n = ng.attributes.position.count, c = new Float32Array(n * 3); for (let i = 0; i < n; i++) { c[i * 3] = col.r; c[i * 3 + 1] = col.g; c[i * 3 + 2] = col.b; }
+      const out = new THREE.BufferGeometry(); out.setAttribute('position', ng.attributes.position); out.setAttribute('normal', ng.attributes.normal); out.setAttribute('color', new THREE.BufferAttribute(c, 3)); geos.push(out);
+    });
+    const mesh = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.5, roughness: 0.45 })); mesh.castShadow = true; flatCache.set(def.id, mesh);
+  }
+  return flatCache.get(def.id).clone();
 }
