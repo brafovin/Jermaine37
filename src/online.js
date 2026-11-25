@@ -54,7 +54,7 @@ export function installOnline(Match) {
   P.crateLoot = function (c) {
     const idx = this.world.crates.indexOf(c);
     if (this.opts.online && idx >= 0 && idx < this.world.baseCrates) return this.rollLoot(c.tier, null, mulberry32(this.opts.online.seed * 31 + idx * 7919));
-    return this.rollLoot(c.tier);
+    return this.rollLoot(c.tier, null, Math.random, !this.opts.online);
   };
   P.netCrate = function (c) { if (!this.net) return; const idx = this.world.crates.indexOf(c); this.net.send({ t: 'crate', cid: c.id ?? idx }); };
   P.netShot = function (from, to, def) {

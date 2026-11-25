@@ -1,9 +1,8 @@
 import * as THREE from 'three';
-import { WEAPON_BY_ID, keyName } from './data.js';
+import { WEAPON_BY_ID, keyName, PRESET_CLASSES, unlockLevel } from './data.js';
 import { mulberry32 } from './world.js';
 
 const SITE_R = 7, PLANT_T = 4, DEFUSE_T = 6;
-const PRESETS = [['Sturmgewehr', 'falcon'], ['MP', 'viper'], ['Schrotflinte', 'breacher'], ['Scharfschütze', 'longshot']];
 const TEAM_COL = ['#ff9a3a', '#4aa8ff'];
 
 function labelSprite(text, color) {
@@ -63,7 +62,7 @@ export function installBomb(Match) {
       });
       this.flagList = this.arena.sites.map((s) => ({ x: s.x, z: s.z, name: s.name, color: '#bbbbbb' }));
       this.flagState = this.arena.sites.map(() => [0, -1]);
-      this.hud.el('loadout').style.display = 'block'; this.hud.banner('FLAGGEN EINNEHMEN', 'Stehe in den Ringen A, B, C – wer mehr Flaggen hält, sammelt Punkte', 5000);
+      this.refreshLoadoutUI(); this.hud.el('loadout').style.display = 'block'; this.hud.banner('FLAGGEN EINNEHMEN', 'Stehe in den Ringen A, B, C – wer mehr Flaggen hält, sammelt Punkte', 5000);
       const p0 = this.player; p0.armor = 50; p0.ammo = { light: 120, medium: 0, heavy: 0, shells: 0, rocket: 0 }; this.loadoutPick(0, true);
       n.on('fstate', (m) => this.onFState(m)).on('respawn', (m) => this.onRespawn(m)).on('matchend', (m) => this.onMatchEnd(m));
       for (const r of this.remotes.values()) { const sp = this.bombSpawn(this.sideOf(r.team), this.teamIdx[r.id]); r.x = r.tx = sp.x; r.z = r.tz = sp.z; r.y = r.ty = sp.y; r.st = 'ground'; }
@@ -87,7 +86,7 @@ export function installBomb(Match) {
     this.countAlive(); this.hud.setHealth(p.hp, p.armor, 0); this.audio.match();
     const att = this.myTeam === this.attTeam;
     this.hud.banner(`RUNDE ${m.n}`, att ? 'Angreifer: lege die Bombe an Platz A oder B' : 'Verteidiger: verhindere das Legen oder entschärfe die Bombe', 4000);
-    this.hud.el('loadout').style.display = 'block';
+    this.refreshLoadoutUI(); this.hud.el('loadout').style.display = 'block';
   };
   P.onPhase = function (m) { this.phase = m.phase; this.frozen = false; this.phaseEnd = performance.now() + m.dur * 1000; this.hud.el('loadout').style.display = 'none'; this.hud.banner('LOS!', '', 1200); this.audio.warn(); };
   P.onPlanted = function (m) {
@@ -154,12 +153,17 @@ export function installBomb(Match) {
     const el = this.hud.results(`<div class="res-box"><div class="res-title ${win ? 'win' : ''}">${win ? 'SIEG!' : 'NIEDERLAGE'}</div><div class="res-sub">${this.flagMode ? 'Flaggen' : 'Bombe'} 6 gegen 6${m.forfeit ? ' · Gegner hat aufgegeben' : ''}</div>
       <div class="res-rank"><b style="color:${TEAM_COL[this.myTeam]}">${sc[this.myTeam]}</b> : <b style="color:${TEAM_COL[1 - this.myTeam]}">${sc[1 - this.myTeam]}</b></div>
       <div class="res-grid"><div><b>${p.kills}</b><span>Kills</span></div><div><b>${win ? 'Sieg' : 'Niederl.'}</b><span>Ergebnis</span></div><div><b>+${res.xp}</b><span>XP</span></div><div><b>+$${res.coins}</b><span>Münzen</span></div></div>
-      ${res.levelUp ? `<div class="res-lvl">LEVEL UP! Du bist jetzt Level ${res.level}</div>` : ''}<button class="btn big" id="res-back">ZURÜCK ZUR LOBBY</button></div>`);
+      ${res.levelUp ? `<div class="res-lvl">LEVEL UP! Du bist jetzt Level ${res.level} · +${res.levelCoins} Münzen${res.newWeapons.length ? `<br><small>🔓 Neue Waffen: ${res.newWeapons.map((w) => w.name).join(', ')}</small>` : ''}</div>` : ''}<button class="btn big" id="res-back">ZURÜCK ZUR LOBBY</button></div>`);
     el.querySelector('#res-back').onclick = () => this.exit();
   };
   P.countAlive = function () { let n = this.player.alive ? 1 : 0; for (const r of this.remotes.values()) if (r.alive) n++; this.alive = n; };
+  P.presets = function () { return PRESET_CLASSES.map(([label, ids]) => ({ label, def: WEAPON_BY_ID[ids.find((id) => this.profile.isUnlocked(id)) || ids[ids.length - 1]] })); };
+  P.refreshLoadoutUI = function () {
+    const next = Object.entries({}).length; const lv = this.profile.level.level;
+    this.hud.el('loadout').innerHTML = `<h3>WAFFE WÄHLEN</h3>${this.presets().map((x, i) => `<div><b>${i + 1}</b> ${x.label} <i>${x.def.name}</i></div>`).join('')}<small>+ Pistole · Rüstung 50 · Level ${lv}: mehr Waffen schaltest du durch Level frei</small>`;
+  };
   P.loadoutPick = function (i, silent) {
-    const p = this.player, [, id] = PRESETS[i] || PRESETS[0], def = WEAPON_BY_ID[id];
+    const p = this.player, def = (this.presets()[i] || this.presets()[0]).def;
     if (!p.alive) { this.pickedLoadout = i; this.hud.toast(`Respawn mit: ${def.name}`, '#ffd24a'); return; }
     p.slots = [{ def, mag: def.mag }, { def: WEAPON_BY_ID.sidekick, mag: 12 }, null]; p.cur = 0; p.swap = 0.2; p.ammo[def.ammo] = Math.max(p.ammo[def.ammo], def.mag * 3); p.ammo.light = Math.max(p.ammo.light, 60);
     this.refreshWeaponUI(); if (!silent) this.audio.pickup(); this.pickedLoadout = i;

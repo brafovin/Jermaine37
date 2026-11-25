@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { charLabel, RANKS, WEAPONS, WEAPON_BY_ID, SKINS, SKIN_BY_ID, COLORS, CHARS, ITEMS, ITEM_BY, ITEM_LABEL, CHAR_BY_ID, resolveSkin, RARITY, AMMO, BP_TIERS, BP_XP, BP_PREMIUM_PRICE, bpReward, hex, PLACEMENT_MATCHES } from './data.js';
+import { MAX_LEVEL, unlockLevel, weaponsAtLevel, levelReward, charLabel, RANKS, WEAPONS, WEAPON_BY_ID, SKINS, SKIN_BY_ID, COLORS, CHARS, ITEMS, ITEM_BY, ITEM_LABEL, CHAR_BY_ID, resolveSkin, RARITY, AMMO, BP_TIERS, BP_XP, BP_PREMIUM_PRICE, bpReward, hex, PLACEMENT_MATCHES } from './data.js';
 import { badgeSVG } from './badges.js';
 import { makeSoldier } from './weaponmodel.js';
 import { xpForLevel } from './profile.js';
@@ -70,6 +70,7 @@ export class Lobby {
       <button class="nav" data-p="bp"><i>★</i><span>BATTLE PASS</span></button>
       <button class="nav" data-p="arsenal"><i>🔫</i><span>WAFFEN</span></button>
       <button class="nav" data-p="rank"><i>🏆</i><span>RANG</span></button>
+      <button class="nav" data-p="level"><i>🎖</i><span>LEVEL</span></button>
       <button class="nav" data-p="top"><i>🥇</i><span>TOP 100</span></button>
     </div>
     <div class="lb-title"><b>JERMAINE37</b><span>BATTLE ROYALE</span></div>
@@ -111,7 +112,7 @@ export class Lobby {
     if (this._ctl && name !== 'settings') { this._ctl.destroy(); this._ctl = null; }
     this.panelName = name; const b = this.root.querySelector('#panel-body'), pan = this.root.querySelector('#panel');
     pan.style.display = 'flex';
-    ({ top: () => this.pTop(b), shop: () => this.pShop(b), bp: () => this.pBP(b), arsenal: () => this.pArsenal(b), rank: () => this.pRank(b), settings: () => this.pSettings(b), account: () => this.pAccount(b) })[name]();
+    ({ level: () => this.pLevel(b), top: () => this.pTop(b), shop: () => this.pShop(b), bp: () => this.pBP(b), arsenal: () => this.pArsenal(b), rank: () => this.pRank(b), settings: () => this.pSettings(b), account: () => this.pAccount(b) })[name]();
   }
   closePanel() { if (this._ctl) { this._ctl.destroy(); this._ctl = null; } this.panelName = null; const p = this.root.querySelector('#panel'); if (p) p.style.display = 'none'; }
   rerender() { if (this.panelName) this.openPanel(this.panelName); this.refreshTop(); }
@@ -167,9 +168,10 @@ export class Lobby {
   pArsenal(b) {
     const mx = (k) => Math.max(...WEAPONS.map((w) => (k === 'dps' ? w.dmg * w.pellets * w.rpm / 60 : w[k])));
     const bar = (v, m, c) => `<div class="sb"><i style="width:${Math.min(100, v / m * 100)}%;background:${c}"></i></div>`;
-    b.innerHTML = `<h2>WAFFENKAMMER <small>20 Waffen · in Kisten im Match zu finden</small></h2><div class="grid w">${WEAPONS.map((w) => {
-      const rar = RARITY[w.rarity], dps = w.dmg * w.pellets * w.rpm / 60;
-      return `<div class="card weap ${this.previewWeapon === w.id ? 'eq' : ''}" style="--rc:${rar.color}" data-w="${w.id}"><div class="wn">${w.name}</div><div class="wc">${w.cls} · <span style="color:${rar.color}">${rar.name}</span></div>
+    const lvNow = this.profile.level.level, nOpen = WEAPONS.filter((w) => lvNow >= unlockLevel(w.id)).length;
+    b.innerHTML = `<h2>WAFFENKAMMER <small>${nOpen} von 20 freigeschaltet · Level ${lvNow} · neue Waffen schaltest du durch Level frei</small></h2><div class="grid w">${WEAPONS.slice().sort((a, b) => unlockLevel(a.id) - unlockLevel(b.id)).map((w) => {
+      const rar = RARITY[w.rarity], dps = w.dmg * w.pellets * w.rpm / 60, locked = lvNow < unlockLevel(w.id);
+      return `<div class="card weap ${this.previewWeapon === w.id ? 'eq' : ''} ${locked ? 'locked' : ''}" style="--rc:${rar.color}" ${locked ? '' : `data-w="${w.id}"`}>${locked ? `<div class="lock">🔒 Level ${unlockLevel(w.id)}</div>` : ''}<div class="wn">${w.name}</div><div class="wc">${w.cls} · <span style="color:${rar.color}">${rar.name}</span></div>
         <div class="stat"><span>Schaden</span>${bar(dps, mx('dps'), '#ff6a4a')}</div><div class="stat"><span>Reichweite</span>${bar(w.range, 750, '#4aa8ff')}</div><div class="stat"><span>Feuerrate</span>${bar(w.rpm, 1100, '#ffd24a')}</div><div class="stat"><span>Magazin</span>${bar(w.mag, 100, '#8aff8a')}</div>
         <div class="wm">${w.mag} Schuss · ${AMMO[w.ammo].name}</div></div>`; }).join('')}</div>`;
     b.querySelectorAll('[data-w]').forEach((e) => (e.onclick = () => { this.previewWeapon = e.dataset.w; this.rebuildSoldier(); this.audio.click(); this.openPanel('arsenal'); }));
@@ -183,6 +185,19 @@ export class Lobby {
         <small>Matches: ${d.stats.matches} · Siege: ${d.stats.wins} · Kills: ${d.stats.kills} · Beste Platzierung: #${d.stats.best}</small></div></div>
       <div class="rank-row">${RANKS.map((r, i) => `<div class="rk ${i === rk.idx ? 'cur' : ''}">${badgeSVG(i, 70)}<b style="color:${r.color}">${r.name}</b><small>${i === 0 ? 'Platzierung' : r.min + '+ RP'}</small></div>`).join('')}</div>
       <p class="sub">RP pro Ranked-Match: Sieg +60 · Top 5 +40 · Top 10 +28 · Top 25 +14 · Top 50 ±0 · darunter Verlust. Dazu +5 RP pro Kill (max. 10). Die Gegner in der Lobby werden nach deinem Rang ausgewählt.</p>`;
+  }
+  pLevel(b) {
+    const p = this.profile, lv = p.level, d = p.data, next = (() => { for (let l = lv.level + 1; l <= MAX_LEVEL; l++) { const w = weaponsAtLevel(l); if (w.length) return { l, w }; } return null; })();
+    const tiles = [];
+    for (let l = 1; l <= MAX_LEVEL; l++) {
+      const ws = weaponsAtLevel(l), st = l < lv.level ? 'done' : l === lv.level ? 'cur' : '';
+      tiles.push(`<div class="lvt ${st}"><div class="lvn">${l}</div><div class="lvc"><i class="coin"></i>${levelReward(l)}</div>${ws.map((w) => `<div class="lvw" style="color:${RARITY[w.rarity].color}">🔓 ${w.name}</div>`).join('')}</div>`);
+    }
+    b.innerHTML = `<h2>LEVEL <small>Stufe ${lv.level}/${MAX_LEVEL} · ${d.xp.toLocaleString('de-DE')} XP gesamt</small></h2>
+      <div class="lv-head"><div class="lv-big">${lv.level}</div><div style="flex:1"><div class="xpbar wide"><i style="width:${lv.max ? 100 : (lv.cur / lv.need) * 100}%"></i></div><small>${lv.max ? 'Maximales Level erreicht' : `${lv.cur} / ${lv.need} XP bis Level ${lv.level + 1}`}</small>
+      <p class="sub">${next ? `Nächste Waffe: <b>${next.w.map((w) => w.name).join(', ')}</b> bei Level ${next.l}` : 'Alle Waffen freigeschaltet!'} · XP bekommst du pro Match für Platzierung, Kills und Überlebenszeit. Jedes Level bringt Münzen.</p></div></div>
+      <div class="lvgrid">${tiles.join('')}</div>`;
+    const cur = b.querySelector('.lvt.cur'); if (cur) cur.scrollIntoView({ block: 'center' });
   }
   async pTop(b) {
     b.innerHTML = `<h2>TOP 100 <small>Ranked · beste Spieler</small></h2><p class="sub">Lade Bestenliste…</p>`;

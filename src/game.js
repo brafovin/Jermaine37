@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { WEAPONS, WEAPON_BY_ID, AMMO, RARITY, SKIN_BY_ID, RANKS, resolveSkin, keyName } from './data.js';
+import { WEAPONS, WEAPON_BY_ID, AMMO, RARITY, SKIN_BY_ID, RANKS, resolveSkin, keyName, unlockLevel } from './data.js';
 import { HALF, mulberry32 } from './world.js';
 import { makeWeaponModel, flashTexture } from './weaponmodel.js';
 import { HUD } from './hud.js';
@@ -382,14 +382,17 @@ export class Match {
     setTimeout(() => this.hud.banner('TOKEN-TRUHE!', `Verstecktes Geschenk in ${t.name}: Battle Pass gratis. Siehe Karte (★).`, 6500), 5000);
   }
   // ---------- Kisten & Beute ----------
-  rollLoot(tier, bot, rnd = Math.random) {
+  rollLoot(tier, bot, rnd = Math.random, onlyUnlocked = false) {
     const items = [], r = rnd;
     let def;
     if (tier === 3 && bot) def = bot.w;
     else {
       const W = [[55, 30, 12, 3, 0], [10, 30, 35, 20, 5], [0, 5, 25, 40, 30]][tier]; let v = r() * 100, rar = 0;
       for (let i = 0; i < 5; i++) { if (v < W[i]) { rar = i; break; } v -= W[i]; rar = i; }
-      const pool = WEAPONS.filter((w) => w.rarity === rar); def = pool[(r() * pool.length) | 0] || WEAPONS[0];
+      const ok = (w) => !onlyUnlocked || this.profile.isUnlocked(w.id);
+      let pool = WEAPONS.filter((w) => w.rarity === rar && ok(w));
+      if (!pool.length) { const all = WEAPONS.filter(ok), best = Math.min(...all.map((w) => Math.abs(w.rarity - rar))); pool = all.filter((w) => Math.abs(w.rarity - rar) === best); }
+      def = pool[(r() * pool.length) | 0] || WEAPONS[0];
     }
     items.push({ type: 'weapon', def });
     const n = def.ammo === 'rocket' ? 3 : Math.ceil(def.mag * (def.ammo === 'heavy' ? 1.3 : def.ammo === 'shells' ? 2 : 2.2));
@@ -405,6 +408,7 @@ export class Match {
     const p = this.player;
     for (const it of items) {
       if (it.type === 'weapon') {
+        if (!this.profile.isUnlocked(it.def.id)) { p.ammo[it.def.ammo] = Math.min(400, p.ammo[it.def.ammo] + it.def.mag); this.hud.toast(`🔒 ${it.def.name} <small>gesperrt – ab Level ${unlockLevel(it.def.id)} · Munition erhalten</small>`, '#ff9a6a'); continue; }
         if (p.slots.some((s) => s && s.def === it.def)) { p.ammo[it.def.ammo] += Math.round(it.def.mag * 0.6); this.hud.toast(`${it.def.name} <small>(Duplikat → Munition)</small>`, RARITY[it.def.rarity].color); continue; }
         let slot = p.slots.findIndex((s) => !s); const swapped = slot < 0; if (swapped) slot = p.cur;
         p.slots[slot] = { def: it.def, mag: it.def.mag };
@@ -476,7 +480,7 @@ export class Match {
       <div class="res-title ${place === 1 ? 'win' : ''}">${place === 1 ? 'WINNER WINNER!' : 'PLATZ #' + place}</div>
       <div class="res-sub">${ranked ? 'Ranked' : 'Battle Royale'} · ${mm}:${ss} überlebt</div>
       <div class="res-grid"><div><b>${p.kills}</b><span>Kills</span></div><div><b>#${place}</b><span>Platzierung</span></div><div><b>+${res.xp}</b><span>XP</span></div><div><b>+$${res.coins}</b><span>Bargeld → Münzen</span></div></div>
-      ${rankHtml}${res.levelUp ? `<div class="res-lvl">LEVEL UP! Du bist jetzt Level ${res.level}</div>` : ''}
+      ${rankHtml}${res.levelUp ? `<div class="res-lvl">LEVEL UP! Du bist jetzt Level ${res.level} · +${res.levelCoins} Münzen${res.newWeapons.length ? `<br><small>🔓 Neue Waffen: ${res.newWeapons.map((w) => w.name).join(', ')}</small>` : ''}</div>` : ''}
       <button class="btn big" id="res-back">ZURÜCK ZUR LOBBY</button></div>`);
     el.querySelector('#res-back').onclick = () => this.exit();
   }

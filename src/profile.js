@@ -1,4 +1,4 @@
-import { SKIN_BY_ID, ITEM_BY, DEFAULT_KEYS, BP_TIERS, BP_XP, BP_PREMIUM_PRICE, bpReward, getRank, rpForMatch } from './data.js';
+import { SKIN_BY_ID, ITEM_BY, DEFAULT_KEYS, MAX_LEVEL, unlockLevel, weaponsAtLevel, levelReward, xpForLevel as xpFor, WEAPONS, BP_TIERS, BP_XP, BP_PREMIUM_PRICE, bpReward, getRank, rpForMatch } from './data.js';
 
 const KEY = 'jermaine37_br_profile_v1';
 
@@ -25,7 +25,7 @@ function fresh() {
   };
 }
 
-export const xpForLevel = (lvl) => 300 + lvl * 60;
+export const xpForLevel = xpFor;
 
 export class Profile {
   constructor() {
@@ -37,6 +37,7 @@ export class Profile {
       const f = fresh(); for (const k of ['ownedColors', 'ownedChars', 'skinColor', 'charSkin', 'playerId']) if (this.data[k] === undefined) this.data[k] = f[k];
     } catch (e) { /* ignore */ }
     this.listeners = new Set();
+    if (this.data.levelRewarded === undefined) this.data.levelRewarded = this.level.level; // bisherige Level gelten als belohnt
   }
   save() {
     try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch (e) { /* ignore */ }
@@ -45,9 +46,10 @@ export class Profile {
   onChange(f) { this.listeners.add(f); }
   get level() {
     let xp = this.data.xp, lvl = 1;
-    while (xp >= xpForLevel(lvl)) { xp -= xpForLevel(lvl); lvl++; }
-    return { level: lvl, cur: xp, need: xpForLevel(lvl) };
+    while (lvl < MAX_LEVEL && xp >= xpForLevel(lvl)) { xp -= xpForLevel(lvl); lvl++; }
+    return lvl >= MAX_LEVEL ? { level: lvl, cur: 1, need: 1, max: true } : { level: lvl, cur: xp, need: xpForLevel(lvl) };
   }
+  isUnlocked(id) { return this.level.level >= unlockLevel(id); }
   get rank() { return getRank(this.data.rp, this.data.rankedPlayed); }
   get bpTier() { return Math.min(BP_TIERS, Math.floor(this.data.bpXp / BP_XP)); }
   get daysLeft() { return Math.max(0, Math.ceil((this.data.seasonEnd - Date.now()) / 86400000)); }
@@ -106,11 +108,14 @@ export class Profile {
     d.xp += xp;
     d.bpXp = Math.min(BP_TIERS * BP_XP, d.bpXp + xp);
     d.coins += cash;
+    const lvAfter = this.level.level; let lvCoins = 0; const newWeapons = [];
+    for (let l = Math.max(d.levelRewarded, 0) + 1; l <= lvAfter; l++) { lvCoins += levelReward(l); newWeapons.push(...weaponsAtLevel(l)); }
+    if (lvAfter > d.levelRewarded) d.levelRewarded = lvAfter; d.coins += lvCoins;
     d.stats.matches++; d.stats.kills += kills;
     if (win) d.stats.wins++;
     if (placement <= 10) d.stats.top10++;
     d.stats.best = Math.min(d.stats.best, placement);
     this.save();
-    return { xp, rpDelta, before, after: this.rank, levelUp: this.level.level > lvBefore, level: this.level.level, coins: cash };
+    return { xp, rpDelta, before, after: this.rank, levelUp: lvAfter > lvBefore, level: lvAfter, levelCoins: lvCoins, newWeapons, coins: cash };
   }
 }

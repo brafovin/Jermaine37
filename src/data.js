@@ -86,6 +86,17 @@ export const WEAPONS = [
 ];
 export const WEAPON_BY_ID = Object.fromEntries(WEAPONS.map((w) => [w.id, w]));
 
+// ---------- Level-System ----------
+export const MAX_LEVEL = 50;
+// Ab diesem Level ist die Waffe freigeschaltet (4 Waffen gibt es von Anfang an)
+export const WEAPON_UNLOCK = { sidekick: 1, viper: 1, falcon: 1, breacher: 1, hornet: 2, magnum: 3, ranger: 4, scatter: 5, stinger: 6, marksman: 8, bulldog: 10, hammer: 12, auto12: 14, hawk: 16, titan: 18, anvil: 20, longshot: 22, phantom: 25, reaper: 28, boomstick: 30 };
+export const unlockLevel = (id) => WEAPON_UNLOCK[id] || 1;
+export const weaponsAtLevel = (l) => WEAPONS.filter((w) => unlockLevel(w.id) === l);
+export const levelReward = (l) => 50 + l * 25 + (l % 5 === 0 ? 250 : 0);
+export const xpForLevel = (lvl) => 300 + lvl * 60;
+// Loadout-Klassen für die Team-Modi (stärkste freigeschaltete Waffe zuerst)
+export const PRESET_CLASSES = [['Sturmgewehr', ['titan', 'bulldog', 'ranger', 'falcon']], ['MP', ['stinger', 'hornet', 'viper']], ['Schrotflinte', ['auto12', 'scatter', 'breacher']], ['Scharfschütze', ['reaper', 'phantom', 'longshot']]];
+
 // ---------- Skins (Shop) ----------
 export const SKINS = [
   { id: 'default', name: 'Wüsten-Camo', price: 0, rarity: 0, color: 0xc9761a, accent: 0x2a2216, emissive: 0x000000, camo: ['#c9761a', '#7a4e1c', '#1b1611'] },
