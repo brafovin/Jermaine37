@@ -155,5 +155,13 @@ kbd{background:#2a343a;border:1px solid #556;padding:1px 8px;border-radius:3px;m
 #bombhud{top:10px;left:50%;transform:translateX(-50%);text-align:center;display:none;text-shadow:0 1px 4px #000}
 #bombhud .bh{font-size:24px;letter-spacing:.06em;background:rgba(0,0,0,.55);padding:3px 22px}#bombhud .bh i{font-style:normal;margin:0 14px;color:#fff}#bombhud .bh b{font-size:34px;margin:0 6px}
 #bombhud .bt{font-size:44px;font-weight:800;line-height:1.05}#bombhud .bt.red{color:#ff4040;animation:blink .6s infinite}#bombhud .bs{font-size:16px;color:#e0e8ec;background:rgba(0,0,0,.4);display:inline-block;padding:1px 12px;margin-top:2px}.bomb{color:#ff6a4a;font-weight:700}
+#bombhud .fl{margin-top:4px;display:flex;gap:6px;justify-content:center}.fdot{width:30px;height:30px;border-radius:50%;border:2px solid #000;color:#000;font-weight:800;font-size:17px;display:flex;align-items:center;justify-content:center}
 #loadout{left:18px;top:42%;background:rgba(0,0,0,.6);border-left:4px solid var(--yellow);padding:10px 18px;display:none;font-size:20px}#loadout h3{font-size:22px;margin-bottom:6px}#loadout div{margin:3px 0}#loadout b{background:#2a343a;padding:1px 9px;margin-right:8px;border:1px solid #fff4}#loadout i{font-style:normal;color:#9fb0b8;font-size:16px}#loadout small{color:#9fb0b8}
 .modes{flex-wrap:wrap}.mode{flex:1 1 45%}
+
+.tabs{display:flex;gap:8px;margin:12px 0 4px;flex-wrap:wrap}.tabs button{padding:8px 18px;background:#162229;border:1px solid var(--line);font-size:17px;font-weight:700}.tabs button.on{background:var(--yellow);color:#111;border-color:var(--yellow)}
+.swatch.round{width:96px;height:96px;border-radius:50%;margin:0 auto}.rw.skin .sw.round{width:46px;height:46px;border-radius:50%}.rw small{font-size:11px;color:#aab;font-weight:500}
+.ctl{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin:8px 0}.ctl-row{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:16px;text-transform:none;font-weight:500}
+.keybtn{min-width:96px;padding:5px 12px;background:#2a343a;border:1px solid #667;font-size:16px;font-weight:700}.keybtn.on{background:var(--yellow);color:#111}.keybtn:hover{background:#3a474f}
+.chk{display:flex;align-items:center;gap:10px;font-size:17px;text-transform:none;font-weight:500;margin:6px 0}.chk input{width:18px;height:18px}
+#pause .box{max-height:86vh;overflow:auto}#p-ctl{width:min(760px,86vw);text-align:left}

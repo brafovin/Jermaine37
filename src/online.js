@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { WEAPON_BY_ID } from './data.js';
+import { WEAPON_BY_ID, CHAR_BY_ID } from './data.js';
 import { makeHumanGroup, randomOutfit } from './human.js';
 import { characterReady, Actor } from './character.js';
 import { flatWeapon } from './weaponmodel.js';
@@ -26,7 +26,7 @@ export function installOnline(Match) {
     for (const pl of on.players) {
       if (pl.id === on.you) continue;
       let actor = null, group, outfit = null;
-      if (characterReady()) { actor = new Actor(pl.id, this.bomb ? (pl.team === 0 ? 0xffc080 : 0x9ec0ff) : null); group = new THREE.Group(); group.add(actor.root); actor.attachWeapon(flatWeapon(WEAPON_BY_ID.sidekick)); }
+      if (characterReady()) { actor = new Actor(pl.id, this.bomb ? (pl.team === 0 ? 0xffc080 : 0x9ec0ff) : (CHAR_BY_ID[pl.cskin] ? CHAR_BY_ID[pl.cskin].tint : null)); group = new THREE.Group(); group.add(actor.root); actor.attachWeapon(flatWeapon(WEAPON_BY_ID.sidekick)); }
       else { outfit = randomOutfit(mulberry32(on.seed + pl.id * 131)); group = makeHumanGroup(outfit, false); }
       if (!this.bomb || pl.team === this.myTeam) group.add(nameSprite(pl.name));
       const [sx, sz] = this.spawnPos(pl.index, on.count);

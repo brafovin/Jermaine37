@@ -58,7 +58,7 @@ export function noiseFill(ctx, size, base, amp, n = 6000, rnd = Math.random) {
 }
 
 const TOWN_NAMES = ['Port Nova', 'Kaserne Nord', 'Flughafen Delta', 'Raffinerie', 'Birkental', 'Steinbruch', 'Funkturm Echo', 'Fischerdorf', 'Industriepark', 'Altstadt', 'Seeblick', 'Bunkeranlage', 'Basis Alpha', 'Klinik St. Marek', 'Hochland', 'Zollhafen'];
-export const TIER_COLORS = [0x8a6a3a, 0x3a86e0, 0xf0b020, 0x6a7078];
+export const TIER_COLORS = [0x8a6a3a, 0x3a86e0, 0xf0b020, 0x6a7078, 0xb43cff];
 
 export class World {
   constructor(renderer, scene, q, seed = 1337) {

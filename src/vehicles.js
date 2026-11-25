@@ -153,10 +153,10 @@ export function installVehicles(Match) {
   P.updateDriving = function (dt) {
     const p = this.player, v = p.vehicle, k = this.keys, cam = this.camera;
     this.viewGroup.visible = false; this.hud.scope(false, true);
-    const thr = (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0), st = (k.has('KeyA') ? 1 : 0) - (k.has('KeyD') ? 1 : 0);
+    const B = this.bind, thr = (k.has(B.forward) ? 1 : 0) - (k.has(B.back) ? 1 : 0), st = (k.has(B.left) ? 1 : 0) - (k.has(B.right) ? 1 : 0);
     p.camYaw -= this.mouse.dx * 0.0025; p.camPitch = clamp(p.camPitch + this.mouse.dy * 0.0025, -0.1, 1.0); this.mouse.dx = this.mouse.dy = 0;
     p.camYaw *= Math.exp(-0.8 * dt);
-    this.stepVehicle(v, dt, thr, st, k.has('Space'), true);
+    this.stepVehicle(v, dt, thr, st, k.has(B.jump), true);
     // Überfahren
     if (Math.abs(v.speed) > 5) for (const b of this.bots) {
       if (!b.alive || !b.landed) continue;

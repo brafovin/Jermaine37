@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { WEAPONS, WEAPON_BY_ID, AMMO, RARITY, SKIN_BY_ID, RANKS } from './data.js';
+import { WEAPONS, WEAPON_BY_ID, AMMO, RARITY, SKIN_BY_ID, RANKS, resolveSkin, keyName } from './data.js';
 import { HALF, mulberry32 } from './world.js';
 import { makeWeaponModel, flashTexture } from './weaponmodel.js';
 import { HUD } from './hud.js';
@@ -9,6 +9,7 @@ import { installVehicles } from './vehicles.js';
 import { installOnline } from './online.js';
 import { Effects } from './effects.js';
 import { installBomb } from './bomb.js';
+import { controlsUI } from './controls.js';
 
 const V3 = THREE.Vector3;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -23,7 +24,7 @@ export class Match {
   constructor({ renderer, scene, world, profile, audio, opts, hudRoot, onExit }) {
     Object.assign(this, { renderer, scene, world, profile, audio, opts, onExit });
     this.rnd = mulberry32((Math.random() * 1e9) | 0);
-    this.bomb = !!(opts.online && opts.online.mode === 'bomb'); this.myTeam = this.bomb ? opts.online.team : 0;
+    this.flagMode = !!(opts.online && opts.online.mode === 'flag'); this.bomb = !!(opts.online && (opts.online.mode === 'bomb' || this.flagMode)); this.myTeam = this.bomb ? opts.online.team : 0;
     this.needLock = !new URLSearchParams(location.search).has('nolock');
     this.timeScale = Number(new URLSearchParams(location.search).get('speed')) || 1;
     this.camera = new THREE.PerspectiveCamera(80, innerWidth / innerHeight, 0.1, 3500);
@@ -36,7 +37,7 @@ export class Match {
     this.flashSprite = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: flashTexture(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
     this.flashSprite.visible = false;
     this.hud = new HUD(hudRoot);
-    this.keys = new Set(); this.mouse = { l: false, r: false, dx: 0, dy: 0 };
+    this.keys = new Set(); this.mouse = { l: false, r: false, dx: 0, dy: 0 }; this.bind = profile.keys;
     this.weaponModels = new Map(); this.curModel = null;
     this._pr0 = renderer.getPixelRatio(); this._ft = 16; this._adapt = 0;
     this.initEffects();
@@ -44,6 +45,7 @@ export class Match {
     this.initBots();
     this.initOnline();
     this.initBomb();
+    if (!opts.online) this.initToken();
     this.bindInput();
     this.setupZoneMesh(); if (this.bomb) this.zoneMesh.visible = false;
     this.hud.setStats(this.alive, 0, 0);
@@ -164,19 +166,23 @@ export class Match {
         if (this.over) return;
         if (e.code === 'Escape') return;
         this.keys.add(e.code);
-        if (e.code === 'KeyR') this.startReload();
-        if (this.bomb && this.frozen && this.player.alive && /^Digit[1-4]$/.test(e.code)) this.loadoutPick(+e.code.slice(5) - 1);
-        else { if (e.code === 'Digit1') this.switchTo(0); if (e.code === 'Digit2') this.switchTo(1); if (e.code === 'Digit3') this.switchTo(2); }
-        if (e.code === 'KeyH') this.useMedkit();
-        if (e.code === 'KeyE') this.toggleVehicle();
-        if (e.code === 'KeyM') this.hud.toggleBigMap(!this.hud.bigMapOpen());
-        if (e.code === 'Space' && this.player.state === 'fall') { this.player.chute = !this.player.chute; if (this.player.chute) this.audio.heal(); }
-        if (e.code === 'KeyQ') this.cycleWeapon(1);
-        e.preventDefault && ['Space', 'Tab'].includes(e.code) && e.preventDefault();
+        const B = this.bind, c = e.code, slot = [B.slot1, B.slot2, B.slot3, B.slot4].indexOf(c);
+        if (c === B.reload) this.startReload();
+        if (slot >= 0) { if (this.bomb && (this.frozen || this.player.state === 'spectate')) this.loadoutPick(slot); else if (slot < 3) this.switchTo(slot); }
+        if (c === B.medkit) this.useMedkit();
+        if (c === B.vehicle) this.toggleVehicle();
+        if (c === B.map) this.hud.toggleBigMap(!this.hud.bigMapOpen());
+        if (c === B.jump && this.player.state === 'fall') { this.player.chute = !this.player.chute; if (this.player.chute) this.audio.heal(); }
+        if (c === B.nextWeapon) this.cycleWeapon(1);
+        e.preventDefault && [B.jump, 'Tab'].includes(c) && e.preventDefault();
       },
       ku: (e) => this.keys.delete(e.code),
-      md: (e) => { if (!this.locked && this.needLock) return; if (e.button === 0) this.mouse.l = true; if (e.button === 2) this.mouse.r = true; this.mouse.lClick = e.button === 0; },
-      mu: (e) => { if (e.button === 0) this.mouse.l = false; if (e.button === 2) this.mouse.r = false; },
+      md: (e) => {
+        if (!this.locked && this.needLock) return; const st = this.profile.data.settings, fire = st.swapMouse ? 2 : 0, aim = st.swapMouse ? 0 : 2;
+        if (e.button === fire) { this.mouse.l = true; this.mouse.lClick = true; }
+        if (e.button === aim) { if (st.aimToggle) this.mouse.r = !this.mouse.r; else this.mouse.r = true; }
+      },
+      mu: (e) => { const st = this.profile.data.settings, fire = st.swapMouse ? 2 : 0, aim = st.swapMouse ? 0 : 2; if (e.button === fire) this.mouse.l = false; if (e.button === aim && !st.aimToggle) this.mouse.r = false; },
       mm: (e) => { if (this.locked || !this.needLock) { this.mouse.dx += e.movementX || 0; this.mouse.dy += e.movementY || 0; } },
       wh: (e) => { if (this.locked) this.cycleWeapon(e.deltaY > 0 ? 1 : -1); },
       lock: () => {
@@ -195,6 +201,7 @@ export class Match {
     canvas.addEventListener('click', h.click); this.hud.root.addEventListener('click', h.click); addEventListener('contextmenu', h.ctx); addEventListener('resize', h.resize); addEventListener('blur', h.blur);
     this.hud.el('p-resume').onclick = () => this.lockPointer();
     this.hud.el('p-leave').onclick = () => { this.setPaused(false); this.die('Aufgegeben', 'Rückzug', true); };
+    this.hud.el('p-controls').onclick = () => { const box = this.hud.el('p-ctl'); if (box.style.display === 'block') { box.style.display = 'none'; this.ctl && this.ctl.destroy(); this.ctl = null; } else { box.style.display = 'block'; this.ctl = controlsUI(box, this.profile, () => { this.bind = this.profile.keys; }); } };
     if (this.needLock) { this.paused = true; this.hud.showPause(true); this.hud.el('pause').querySelector('h2').textContent = 'BEREIT?'; }
     this.lockPointer();
   }
@@ -221,7 +228,7 @@ export class Match {
   buildViewModel() {
     const w = this.weapon(); if (this.curModel) this.viewGroup.remove(this.curModel); this.curModel = null; this.flashSprite.parent?.remove(this.flashSprite);
     if (!w) return;
-    const skin = SKIN_BY_ID[this.profile.data.skin] || SKIN_BY_ID.default, key = w.def.id + skin.id;
+    const skin = resolveSkin(this.profile.data.skin, this.profile.data.skinColor), key = w.def.id + skin.id;
     if (!this.weaponModels.has(key)) this.weaponModels.set(key, makeWeaponModel(w.def, skin, true));
     const m = this.weaponModels.get(key); this.curModel = m; this.viewGroup.add(m);
     m.add(this.flashSprite); this.flashSprite.position.copy(m.userData.muzzle);
@@ -365,6 +372,14 @@ export class Match {
     }
   }
 
+  // Token-Truhe: in jeder 100. Runde liegt eine Truhe auf der Karte, die den Battle Pass gratis freischaltet
+  initToken() {
+    this.token = null; const force = new URLSearchParams(location.search).has('token');
+    if (!(this.profile.tokenRound || force)) return;
+    const w = this.world, t = w.towns[(this.rnd() * w.towns.length) | 0], s = t.spots[(this.rnd() * t.spots.length) | 0];
+    this.token = w.addCrate(s[0], s[1], 4, [{ type: 'token' }]);
+    setTimeout(() => this.hud.banner('TOKEN-TRUHE!', `Verstecktes Geschenk in ${t.name}: Battle Pass gratis. Siehe Karte (★).`, 6500), 5000);
+  }
   // ---------- Kisten & Beute ----------
   rollLoot(tier, bot, rnd = Math.random) {
     const items = [], r = rnd;
@@ -398,16 +413,17 @@ export class Match {
       else if (it.type === 'cash') { p.cash += it.n; this.hud.toast(`+$${it.n} Bargeld`, '#7dff7d'); this.audio.cash(); }
       else if (it.type === 'armor') { p.armor = Math.min(100, p.armor + it.n); this.hud.toast(`+${it.n} Rüstung`, '#6ab0ff'); }
       else if (it.type === 'medkit') { p.medkits++; this.hud.toast('+1 Medkit', '#ff7a7a'); }
+      else if (it.type === 'token') { const r = this.profile.claimToken(); this.audio.match(); this.hud.banner('TOKEN GEFUNDEN!', r === 'premium' ? 'Battle Pass Premium freigeschaltet!' : 'Du hattest Premium schon: +1500 Münzen', 6000); this.hud.toast('★ Battle-Pass-Token', '#ffd24a'); }
     }
     this.refreshWeaponUI();
   }
   updateInteract(dt) {
-    if (this.bomb) { this.bombInteract(dt); return; }
+    if (this.bomb) { if (this.flagMode) this.flagInteract(dt); else this.bombInteract(dt); return; }
     const p = this.player; let crate = null;
     if (p.state === 'ground') crate = this.world.nearestCrate(p.pos.x, p.pos.y, p.pos.z, 2.6);
-    if (!crate) { p.interact = 0; this.hud.setProgress(0); const nv = p.state === 'ground' ? this.nearestVehicle(p.pos.x, p.pos.z, 3.6) : null; this.hud.setPrompt(nv ? `E: ${nv.name} fahren` : ''); return; }
-    this.hud.setPrompt(crate.tier === 3 ? 'F halten: Beutekiste plündern' : 'F halten: Kiste öffnen');
-    if (this.keys.has('KeyF')) {
+    if (!crate) { p.interact = 0; this.hud.setProgress(0); const nv = p.state === 'ground' ? this.nearestVehicle(p.pos.x, p.pos.z, 3.6) : null; this.hud.setPrompt(nv ? `${keyName(this.bind.vehicle)}: ${nv.name} fahren` : ''); return; }
+    this.hud.setPrompt(`${keyName(this.bind.interact)} halten: ${crate.tier === 3 ? 'Beutekiste plündern' : crate.tier === 4 ? 'Token-Truhe öffnen' : 'Kiste öffnen'}`);
+    if (this.keys.has(this.bind.interact)) {
       p.interact += dt / 0.7; this.hud.setProgress(p.interact);
       if (p.interact >= 1) {
         p.interact = 0; this.world.openCrate(crate); this.audio.crate();
@@ -497,7 +513,7 @@ export class Match {
     const sens = 0.0022 * this.profile.data.settings.sens * (p.ads > 0.5 && w ? 1 / Math.sqrt(w.def.zoom) : 1);
     p.yaw -= this.mouse.dx * sens; p.pitch = clamp(p.pitch - this.mouse.dy * sens, -1.5, 1.5); this.mouse.dx = this.mouse.dy = 0;
     p.recoilP = Math.max(0, p.recoilP - (0.05 + p.recoilP * 6) * dt); p.recoilY *= Math.max(0, 1 - 5 * dt);
-    const k = this.keys, fz = this.frozen ? 0 : 1, fwd = ((k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0)) * fz, strafe = ((k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0)) * fz;
+    const k = this.keys, B = this.bind, fz = this.frozen ? 0 : 1, fwd = ((k.has(B.forward) ? 1 : 0) - (k.has(B.back) ? 1 : 0)) * fz, strafe = ((k.has(B.right) ? 1 : 0) - (k.has(B.left) ? 1 : 0)) * fz;
     const sy = Math.sin(p.yaw), cy = Math.cos(p.yaw);
     const wx = -sy * fwd + cy * strafe, wz = -cy * fwd - sy * strafe, wl = Math.hypot(wx, wz) || 1;
     if (p.state === 'fall') {
@@ -512,14 +528,14 @@ export class Match {
       else this.hud.setChute(`<b>${Math.round(agl)} m</b><span>${p.chute ? 'Fallschirm offen' : 'Freier Fall — <u>Leertaste</u> öffnet den Fallschirm'}</span>`);
       p.ads = 0;
     } else if (p.state === 'ground') {
-      const crouch = k.has('ControlLeft') || k.has('KeyC'); p.crouch = lerp(p.crouch, crouch ? 1 : 0, 1 - Math.exp(-12 * dt));
-      p.sprint = k.has('ShiftLeft') && fwd > 0 && !crouch && p.ads < 0.2 && p.reload <= 0;
+      const crouch = k.has(B.crouch) || k.has('ControlLeft'); p.crouch = lerp(p.crouch, crouch ? 1 : 0, 1 - Math.exp(-12 * dt));
+      p.sprint = k.has(B.sprint) && fwd > 0 && !crouch && p.ads < 0.2 && p.reload <= 0;
       let sp = p.sprint ? 8.4 : 5.4; sp *= lerp(1, 0.5, p.crouch) * lerp(1, 0.6, p.ads) * (w ? w.def.speed : 1);
       const gH = this.world.groundAt(p.pos.x, p.pos.z, p.pos.y);
       if (gH < -0.3) sp *= 0.55; if (p.healT > 0) sp *= 0.6;
       const tx = (fwd || strafe ? wx / wl : 0) * sp, tz = (fwd || strafe ? wz / wl : 0) * sp, a = 1 - Math.exp(-(p.onGround ? 12 : 1.5) * dt);
       p.vel.x = lerp(p.vel.x, tx, a); p.vel.z = lerp(p.vel.z, tz, a);
-      if (p.onGround && k.has('Space') && p.crouch < 0.5 && !this.frozen) { p.vel.y = 5.6; p.onGround = false; }
+      if (p.onGround && k.has(B.jump) && p.crouch < 0.5 && !this.frozen) { p.vel.y = 5.6; p.onGround = false; }
       p.vel.y -= 17 * dt;
       const ox = p.pos.x, oz = p.pos.z;
       p.pos.x += p.vel.x * dt; p.pos.z += p.vel.z * dt; p.pos.y += p.vel.y * dt;
@@ -614,7 +630,7 @@ export class Match {
     const t = this.world.townAt(p.pos.x, p.pos.z, 1.3); this.hud.setLoc(t ? t.name.toUpperCase() : 'OFFENES GELÄNDE');
     if (!this._mmT || performance.now() - this._mmT > 66) {
       const pings = this.bots.filter((b) => b.alive && b.landed && b.ping > 0 && Math.hypot(b.x - p.pos.x, b.z - p.pos.z) < 220).concat(this.remotes ? [...this.remotes.values()].filter((r) => r.alive && r.ping > 0) : []);
-      const s = { x: p.pos.x, z: p.pos.z, yaw: p.yaw, zone: this.zone, world: this.world, pings };
+      const s = { x: p.pos.x, z: p.pos.z, yaw: p.yaw, zone: this.zone, world: this.world, pings, token: this.token && !this.token.opened ? this.token : null, flags: this.flagList };
       this._mmT = performance.now(); this.hud.drawMinimap(s); if (this.hud.bigMapOpen()) this.hud.drawBigMap(s); }
   }
   renderFrame() {

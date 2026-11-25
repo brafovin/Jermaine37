@@ -22,7 +22,7 @@ export class HUD {
     <div id="progress"><i></i></div>
     <div id="toasts"></div>
     <div id="bombhud"></div>
-    <div id="loadout"><h3>WAFFE WÄHLEN</h3><div><b>1</b> Sturmgewehr <i>Falcon AR</i></div><div><b>2</b> MP <i>Viper</i></div><div><b>3</b> Schrotflinte <i>Breacher</i></div><div><b>4</b> Scharfschütze <i>Longshot</i></div><small>+ Pistole · Rüstung 50</small></div>
+    <div id="loadout"><h3>WAFFE WÄHLEN</h3><div><b>1</b> Sturmgewehr <i>Falcon AR</i></div><div><b>2</b> MP <i>Viper</i></div><div><b>3</b> Schrotflinte <i>Breacher</i></div><div><b>4</b> Scharfschütze <i>Longshot</i></div><small>+ Pistole · Rüstung 50 · Tasten änderbar unter Einstellungen</small></div>
     <div id="chute"></div>
     <div id="speedo"><b id="h-spd">0</b><span>km/h</span><div class="vhp"><i id="h-vhp"></i></div></div>
     <div class="hud-bl">
@@ -35,7 +35,7 @@ export class HUD {
     <div id="bloodfx"></div><div id="dmgflash"></div><div id="dmgdir"><i></i></div>
     <div id="scope"><div class="ring"></div><div class="hair h"></div><div class="hair v"></div></div>
     <div id="bigmap"><canvas id="bigmapc" width="900" height="900"></canvas><div class="bm-hint">M zum Schließen</div></div>
-    <div id="pause"><div class="box"><h2>PAUSIERT</h2><p>Klicke ins Spiel, um fortzufahren</p><button class="btn" id="p-resume">Fortsetzen</button><button class="btn ghost" id="p-leave">Match verlassen</button></div></div>
+    <div id="pause"><div class="box"><h2>PAUSIERT</h2><p>Klicke ins Spiel, um fortzufahren</p><button class="btn" id="p-resume">Fortsetzen</button><button class="btn ghost" id="p-controls">Steuerung ändern</button><div id="p-ctl" style="display:none"></div><button class="btn ghost" id="p-leave">Match verlassen</button></div></div>
     <div id="banner"></div>
     <div id="results"></div>`;
     this.el = (id) => $('#' + id, root);
@@ -128,7 +128,13 @@ export class HUD {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#ffd400'; ctx.beginPath(); ctx.moveTo(S / 2, S / 2 - 9); ctx.lineTo(S / 2 + 6, S / 2 + 7); ctx.lineTo(S / 2, S / 2 + 3); ctx.lineTo(S / 2 - 6, S / 2 + 7); ctx.closePath(); ctx.fill();
     ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
+    if (s.token) { // Token-Truhe: goldener Stern, am Kartenrand festgeklemmt
+      const dx = s.token.x - s.x, dz = s.token.z - s.z, px = S / 2 + scale * (c * dx - sn * dz), py = S / 2 + scale * (sn * dx + c * dz), X = Math.max(12, Math.min(S - 12, px)), Y = Math.max(12, Math.min(S - 12, py));
+      this.star(ctx, X, Y, 9 + Math.sin(performance.now() / 250) * 1.5);
+    }
+    for (const f of s.flags || []) { const dx = f.x - s.x, dz = f.z - s.z, X = Math.max(10, Math.min(S - 10, S / 2 + scale * (c * dx - sn * dz))), Y = Math.max(10, Math.min(S - 10, S / 2 + scale * (sn * dx + c * dz))); ctx.fillStyle = f.color; ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(X, Y, 8, 0, 6.3); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#000'; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center'; ctx.fillText(f.name, X, Y + 4); }
   }
+  star(ctx, x, y, r) { ctx.save(); ctx.translate(x, y); ctx.fillStyle = '#ffd24a'; ctx.strokeStyle = '#6a4a00'; ctx.lineWidth = 1.5; ctx.beginPath(); for (let i = 0; i < 10; i++) { const rr = i % 2 ? r * 0.45 : r, a = -Math.PI / 2 + (i * Math.PI) / 5; ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); } ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore(); }
   drawBigMap(s) {
     const ctx = this.bm, S = 900, k = S / MAP;
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(s.world.mapCanvas, 0, 0, S, S);
@@ -138,6 +144,8 @@ export class HUD {
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(X(s.zone.tcx), Z(s.zone.tcz), s.zone.tr * k, 0, 6.2832); ctx.stroke();
     ctx.font = 'bold 15px Arial'; ctx.textAlign = 'center'; ctx.lineWidth = 3;
     for (const t of s.world.towns) { ctx.strokeStyle = '#000'; ctx.strokeText(t.name, X(t.x), Z(t.z) - 4); ctx.fillStyle = '#fff'; ctx.fillText(t.name, X(t.x), Z(t.z) - 4); }
+    if (s.token) { this.star(ctx, X(s.token.x), Z(s.token.z), 14); ctx.fillStyle = '#ffd24a'; ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.font = 'bold 15px Arial'; ctx.textAlign = 'center'; ctx.strokeText('TOKEN-TRUHE', X(s.token.x), Z(s.token.z) - 18); ctx.fillText('TOKEN-TRUHE', X(s.token.x), Z(s.token.z) - 18); }
+    for (const f of s.flags || []) { ctx.fillStyle = f.color; ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(X(f.x), Z(f.z), 12, 0, 6.3); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#000'; ctx.font = 'bold 14px Arial'; ctx.textAlign = 'center'; ctx.fillText(f.name, X(f.x), Z(f.z) + 5); }
     ctx.save(); ctx.translate(X(s.x), Z(s.z)); ctx.rotate(-s.yaw); ctx.fillStyle = '#ffd400'; ctx.strokeStyle = '#000'; ctx.beginPath(); ctx.moveTo(0, -11); ctx.lineTo(8, 9); ctx.lineTo(0, 4); ctx.lineTo(-8, 9); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
   }
   results(html) { const r = this.el('results'); r.innerHTML = html; r.style.display = 'flex'; return r; }

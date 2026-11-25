@@ -8,12 +8,22 @@ function boxGeo(w, h, l) { const k = w + ',' + h + ',' + l; if (!geoCache.has(k)
 function cylGeo(r, l, seg = 12) { const k = 'c' + r + ',' + l; if (!geoCache.has(k)) { const g = new THREE.CylinderGeometry(r, r, l, seg); g.rotateX(Math.PI / 2); geoCache.set(k, g); } return geoCache.get(k); }
 
 const camoCache = new Map();
+function drawPattern(x, s, skin, R) {
+  const [c0, c1, c2] = skin.camo, pat = skin.pattern || 'camo';
+  x.fillStyle = c0; x.fillRect(0, 0, s, s);
+  if (pat === 'digital') { const b = 16; for (let i = 0; i < s / b; i++) for (let j = 0; j < s / b; j++) { const v = R(); if (v < 0.34) { x.fillStyle = c1; x.fillRect(i * b, j * b, b, b); } else if (v < 0.52) { x.fillStyle = c2; x.fillRect(i * b, j * b, b, b); } } }
+  else if (pat === 'stripes') { x.lineCap = 'round'; for (let i = 0; i < 52; i++) { x.strokeStyle = i % 4 ? c1 : c2; x.lineWidth = 4 + R() * 15; const y = R() * s * 1.2 - 40; x.beginPath(); x.moveTo(-20, y); x.bezierCurveTo(s * 0.3, y - 50 + R() * 60, s * 0.6, y + 40 - R() * 60, s + 20, y + R() * 90 - 20); x.stroke(); } }
+  else if (pat === 'carbon') { const b = 8; for (let i = 0; i < s / b; i++) for (let j = 0; j < s / b; j++) { x.fillStyle = (i + j) % 2 ? c1 : c2; x.fillRect(i * b, j * b, b, b); x.fillStyle = 'rgba(255,255,255,.07)'; x.fillRect(i * b, j * b, b, b / 2); } }
+  else if (pat === 'marble') { x.lineCap = 'round'; for (let i = 0; i < 18; i++) { x.strokeStyle = i % 3 ? c1 : c2; x.globalAlpha = 0.25 + R() * 0.4; x.lineWidth = 1 + R() * 4; x.beginPath(); let px = R() * s, py = 0; x.moveTo(px, py); for (let k = 0; k < 5; k++) { px += (R() - 0.5) * 120; py += s / 5; x.lineTo(px, py); } x.stroke(); } x.globalAlpha = 1; }
+  else if (pat === 'hex') { x.fillStyle = c1; x.fillRect(0, 0, s, s); x.strokeStyle = c2; x.lineWidth = 2.5; x.shadowColor = c2; x.shadowBlur = 6; for (let row = -1; row < s / 29 + 1; row++) for (let col = -1; col < s / 34 + 1; col++) { const cx = col * 34 + (row & 1) * 17, cy = row * 29; x.beginPath(); for (let k = 0; k < 6; k++) { const a = Math.PI / 3 * k + Math.PI / 6; x.lineTo(cx + Math.cos(a) * 17, cy + Math.sin(a) * 17); } x.closePath(); x.stroke(); } x.shadowBlur = 0; }
+  else if (pat === 'flame') { const g = x.createLinearGradient(0, 0, 0, s); g.addColorStop(0, c0); g.addColorStop(1, c1); x.fillStyle = g; x.fillRect(0, 0, s, s); for (let i = 0; i < 22; i++) { const bx = R() * s, h = s * (0.25 + R() * 0.55); x.fillStyle = i % 3 ? c1 : c2; x.globalAlpha = 0.8; x.beginPath(); x.moveTo(bx - 28, s); x.quadraticCurveTo(bx - 34, s - h * 0.5, bx + (R() - 0.5) * 30, s - h); x.quadraticCurveTo(bx + 34, s - h * 0.5, bx + 28, s); x.fill(); } x.globalAlpha = 1; }
+  else for (const [col, n] of [[c1, 40], [c2, 26]]) { x.fillStyle = col; for (let i = 0; i < n; i++) { x.beginPath(); x.ellipse(R() * s, R() * s, 20 + R() * 60, 10 + R() * 30, R() * 3, 0, 6.3); x.fill(); } }
+}
 function camoTexture(skin) {
   if (camoCache.has(skin.id)) return camoCache.get(skin.id);
   const c = document.createElement('canvas'); c.width = c.height = 512; const x = c.getContext('2d'); let seed = 7; const R = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  x.fillStyle = skin.camo[0]; x.fillRect(0, 0, 512, 512);
-  for (const [col, n] of [[skin.camo[1], 40], [skin.camo[2], 26]]) { x.fillStyle = col; for (let i = 0; i < n; i++) { x.beginPath(); const px = R() * 512, py = R() * 512, rx = 20 + R() * 60, ry = 10 + R() * 30, rot = R() * 3; x.ellipse(px, py, rx, ry, rot, 0, 6.3); x.fill(); } }
-  for (let i = 0; i < 9000; i++) { x.fillStyle = `rgba(${R() < 0.5 ? 255 : 0},${R() < 0.5 ? 220 : 0},${R() < 0.5 ? 160 : 0},${R() * 0.18})`; x.fillRect(R() * 512, R() * 512, 1 + R() * 2, 1 + R() * 2); }
+  drawPattern(x, 512, skin, R);
+  for (let i = 0; i < 9000; i++) { x.fillStyle = `rgba(${R() < 0.5 ? 255 : 0},${R() < 0.5 ? 220 : 0},${R() < 0.5 ? 160 : 0},${R() * 0.14})`; x.fillRect(R() * 512, R() * 512, 1 + R() * 2, 1 + R() * 2); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16; t.wrapS = t.wrapT = THREE.RepeatWrapping; camoCache.set(skin.id, t); return t;
 }
 export function skinMaterials(skin) {
@@ -133,9 +143,9 @@ export function flashTexture() {
 // Soldat für die Lobby: menschliche Figur mit Waffe in der Hand
 import { makeHumanGroup, randomOutfit } from './human.js';
 import { characterReady, Actor } from './character.js';
-export function makeSoldier(skin, def) {
+export function makeSoldier(skin, def, tint = null) {
   if (characterReady()) {
-    const a = new Actor(0), root = new THREE.Group(); root.add(a.root); a.attachWeapon(flatWeapon(def), window.__wcfg || {});
+    const a = new Actor(0, tint), root = new THREE.Group(); root.add(a.root); a.attachWeapon(flatWeapon(def, skin), window.__wcfg || {});
     root.userData.update = (t, dt) => a.update(dt || 0.016, 0); root.userData.actor = a; return root;
   }
   const outfit = { skin: 0xd9a47e, hair: 0x3a2416, jacket: 0x4a5236, collar: 0x3a412a, pants: 0x2a2f38, vest: 0x1b1d20, shoe: 0x1c1a18, belt: 0x2a2218, cap: null, helmet: null, pack: null, pony: false, glove: 0x1a1a1a, dark: 0x0a0806, white: 0xf2efe8, iris: 0x2a4a6a, lips: 0xb06a58 };
@@ -149,9 +159,10 @@ export function makeSoldier(skin, def) {
 
 // Waffe als EIN Mesh (für viele Bots): alle Teile mit Vertexfarben verschmolzen
 const flatCache = new Map();
-export function flatWeapon(def) {
-  if (!flatCache.has(def.id)) {
-    const skin = SKIN_BY_ID.default, m = makeWeaponModel(def, skin, false, true); m.updateMatrixWorld(true); const geos = [], col = new THREE.Color();
+export function flatWeapon(def, skinArg) {
+  const skin = skinArg || SKIN_BY_ID.default, ck = def.id + skin.id;
+  if (!flatCache.has(ck)) {
+    const m = makeWeaponModel(def, skin, false, true); m.updateMatrixWorld(true); const geos = [], col = new THREE.Color();
     m.traverse((o) => {
       if (!o.isMesh) return;
       const g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld);
@@ -159,7 +170,7 @@ export function flatWeapon(def) {
       const n = ng.attributes.position.count, c = new Float32Array(n * 3); for (let i = 0; i < n; i++) { c[i * 3] = col.r; c[i * 3 + 1] = col.g; c[i * 3 + 2] = col.b; }
       const out = new THREE.BufferGeometry(); out.setAttribute('position', ng.attributes.position); out.setAttribute('normal', ng.attributes.normal); out.setAttribute('color', new THREE.BufferAttribute(c, 3)); geos.push(out);
     });
-    const mesh = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.5, roughness: 0.45 })); mesh.castShadow = true; flatCache.set(def.id, mesh);
+    const mesh = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.5, roughness: 0.45 })); mesh.castShadow = true; flatCache.set(ck, mesh);
   }
-  return flatCache.get(def.id).clone();
+  return flatCache.get(ck).clone();
 }

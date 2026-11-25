@@ -89,3 +89,13 @@ Wähle in der Lobby **BOMBE 6v6** (Server nötig, siehe Online-Modus). Der Serve
 - **Verteidiger:** verhindern das Legen oder halten **F** (6 s) an der Bombe, um sie zu entschärfen.
 - **Rundenende:** alle Gegner ausgeschaltet, Bombe explodiert/entschärft oder Zeit abgelaufen (dann gewinnen die Verteidiger).
 - Gestorbene schauen bis zur nächsten Runde zu (Klick wechselt den Spieler). Kein Friendly Fire. Gespielt wird in der größten Stadt der (zufälligen) Karte, ohne Kisten, Fahrzeuge und Zone. Der Server kann mit `BOMB_MIN=1 npm run online` zum Testen allein gestartet werden.
+
+## Flaggen-Modus (6 gegen 6, online)
+
+Wähle in der Lobby **FLAGGEN 6v6**. Drei Flaggen (A, B, C) liegen in der größten Stadt der zufälligen Karte. Stehe im Ring, um sie einzunehmen (mehrere Spieler sind schneller, stehen beide Teams im Ring, ist die Flagge umkämpft). Jede gehaltene Flagge bringt deinem Team jede Sekunde 1 Punkt. Wer zuerst **150 Punkte** hat oder nach **10 Minuten** vorne liegt, gewinnt. Gefallene Spieler respawnen nach 5 Sekunden (2,5 s Spawnschutz) und können ihre Waffe (Taste 1–4) vorher wählen. Testen allein: `FLAG_MIN=1 npm run online`.
+
+## Anpassung, Battle Pass & Token
+
+- **Shop** mit drei Kategorien: **Waffenlackierungen** (Muster wie Digital-Camo, Tiger, Karbon, Marmor, Hex-Tech, Inferno), **Skin-Farben** (färben die Lackierung um) und **Charakter-Skins** (Tönung des Soldaten). Der **Battle Pass** (30 Stufen, kostenlos und Premium) enthält Münzen, Lackierungen, Farben und Charakter-Skins.
+- **Token-Truhe:** In jeder 100. Runde (Battle Royale und Ranked gegen Bots) liegt eine violette Truhe mit einem Token auf der Karte, markiert mit einem Stern auf Minimap und Karte. Sie schaltet den Battle Pass (Premium) gratis frei, wer Premium schon hat, bekommt 1500 Münzen. Zum Testen: `?token` an die URL hängen.
+- **Steuerung ändern:** unter Einstellungen (Lobby) oder im Pause-Menü (Esc → „Steuerung ändern"): Taste anklicken, neue Taste drücken. Dazu „Zielen umschalten" und „Maustasten tauschen".

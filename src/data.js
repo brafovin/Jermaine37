@@ -96,7 +96,59 @@ export const SKINS = [
   { id: 'violet', name: 'Neon Violett', price: 1800, rarity: 3, color: 0x3a2a33, accent: 0xb43cff, emissive: 0x6a12b8 },
   { id: 'gold', name: 'Königsgold', price: 3000, rarity: 4, color: 0xd9a520, accent: 0xfff0a0, emissive: 0x5a3c00 },
   { id: 'diamond', name: 'Diamant', price: 4000, rarity: 4, color: 0x4aa8ff, accent: 0xbfe6ff, emissive: 0x0b4a8a },
+  { id: 'digital', name: 'Digital-Camo', price: 1000, rarity: 1, color: 0x5a6a4a, accent: 0x2a3322, emissive: 0, camo: ['#6a7a52', '#3f4a33', '#8a9a70'], pattern: 'digital' },
+  { id: 'tiger', name: 'Tigerstreifen', price: 1600, rarity: 2, color: 0xd08a20, accent: 0x2a1c08, emissive: 0, camo: ['#d99a2a', '#2b1a08', '#a8661a'], pattern: 'stripes' },
+  { id: 'carbon', name: 'Karbonfaser', price: 1400, rarity: 2, color: 0x22262b, accent: 0x7a8088, emissive: 0, camo: ['#1c1f23', '#2c3137', '#0f1113'], pattern: 'carbon' },
+  { id: 'marble', name: 'Marmor', price: 2200, rarity: 3, color: 0xe8e8ee, accent: 0x9aa0b0, emissive: 0, camo: ['#ececf2', '#9aa0b4', '#5a6078'], pattern: 'marble' },
+  { id: 'hex', name: 'Hex-Tech', price: 2600, rarity: 3, color: 0x14303a, accent: 0x30e0ff, emissive: 0x0a6a80, camo: ['#102a34', '#14424e', '#30e0ff'], pattern: 'hex' },
+  { id: 'flame', name: 'Inferno', price: 3200, rarity: 4, color: 0x2a0c06, accent: 0xff6a1a, emissive: 0x802000, camo: ['#2a0c06', '#c0360a', '#ffb020'], pattern: 'flame' },
 ];
+// Skin-Farben: färben die ausgerüstete Waffenlackierung um
+export const COLORS = [
+  { id: 'orig', name: 'Original', price: 0, rarity: 0, hex: null },
+  { id: 'crimson', name: 'Karmesin', price: 500, rarity: 1, hex: 0xe03030 },
+  { id: 'ocean', name: 'Ozean', price: 500, rarity: 1, hex: 0x2f7fe0 },
+  { id: 'toxic', name: 'Gift', price: 600, rarity: 1, hex: 0x40d040 },
+  { id: 'sun', name: 'Sonne', price: 700, rarity: 2, hex: 0xf0c020 },
+  { id: 'violet', name: 'Violett', price: 800, rarity: 2, hex: 0xa040e0 },
+  { id: 'pink', name: 'Pink', price: 900, rarity: 2, hex: 0xff5aa0 },
+  { id: 'cyan', name: 'Cyan', price: 900, rarity: 2, hex: 0x20d0d0 },
+  { id: 'snow', name: 'Schnee', price: 1200, rarity: 3, hex: 0xeeeeee },
+  { id: 'shadow', name: 'Schatten', price: 1500, rarity: 3, hex: 0x303036 },
+];
+export const COLOR_BY_ID = Object.fromEntries(COLORS.map((c) => [c.id, c]));
+// Charakter-Skins: Tönung des Soldaten
+export const CHARS = [
+  { id: 'standard', name: 'Standard', price: 0, rarity: 0, tint: 0xffffff },
+  { id: 'desert', name: 'Wüstenjäger', price: 600, rarity: 1, tint: 0xe0c898 },
+  { id: 'forest', name: 'Waldläufer', price: 600, rarity: 1, tint: 0x9cc89c },
+  { id: 'arctic', name: 'Polar', price: 900, rarity: 2, tint: 0xeaf2ff },
+  { id: 'night', name: 'Nachtschatten', price: 1200, rarity: 2, tint: 0x6a6a78 },
+  { id: 'blood', name: 'Blutrot', price: 1400, rarity: 3, tint: 0xe08080 },
+  { id: 'royal', name: 'Königsgarde', price: 1800, rarity: 3, tint: 0x9ab0ff },
+  { id: 'gold', name: 'Goldelite', price: 3000, rarity: 4, tint: 0xffd860 },
+];
+export const CHAR_BY_ID = Object.fromEntries(CHARS.map((c) => [c.id, c]));
+export const ITEMS = { skin: SKINS, color: COLORS, char: CHARS };
+export const ITEM_LABEL = { skin: 'Waffenlackierung', color: 'Skin-Farbe', char: 'Charakter-Skin' };
+export const ITEM_BY = (type, id) => (type === 'skin' ? SKIN_BY_ID : type === 'color' ? COLOR_BY_ID : CHAR_BY_ID)[id];
+
+// Farbvariante einer Lackierung (Farbton der Palette wird verschoben)
+const toHsl = (h) => { const r = ((h >> 16) & 255) / 255, g = ((h >> 8) & 255) / 255, b = (h & 255) / 255, mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2; let hh = 0, ss = 0; if (mx !== mn) { const d = mx - mn; ss = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn); hh = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; hh /= 6; } return [hh, ss, l]; };
+const hsl2 = (h, s, l) => { const f = (p, q, t) => { if (t < 0) t += 1; if (t > 1) t -= 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; }; const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q; return ((Math.round(f(p, q, h + 1 / 3) * 255) << 16) | (Math.round(f(p, q, h) * 255) << 8) | Math.round(f(p, q, h - 1 / 3) * 255)); };
+const recolor = (hex, target) => { const [, s, l] = toHsl(hex), [th, ts, tl] = toHsl(target); return hsl2(th, Math.min(1, s * 0.35 + ts * 0.65), l * 0.65 + tl * 0.35); };
+const css = (n) => '#' + n.toString(16).padStart(6, '0');
+export function resolveSkin(skinId = 'default', colorId = 'orig') {
+  const base = SKIN_BY_ID[skinId] || SKINS[0], col = COLOR_BY_ID[colorId];
+  if (!col || !col.hex) return base;
+  return { ...base, id: base.id + '_' + col.id, color: recolor(base.color, col.hex), accent: recolor(base.accent, col.hex), emissive: base.emissive ? recolor(base.emissive, col.hex) : 0, camo: base.camo ? base.camo.map((c) => css(recolor(parseInt(c.slice(1), 16), col.hex))) : undefined };
+}
+
+// ---------- Steuerung ----------
+export const DEFAULT_KEYS = { forward: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD', jump: 'Space', sprint: 'ShiftLeft', crouch: 'KeyC', reload: 'KeyR', interact: 'KeyF', vehicle: 'KeyE', medkit: 'KeyH', map: 'KeyM', nextWeapon: 'KeyQ', slot1: 'Digit1', slot2: 'Digit2', slot3: 'Digit3', slot4: 'Digit4' };
+export const KEY_LABELS = { forward: 'Vorwärts', back: 'Rückwärts', left: 'Links', right: 'Rechts', jump: 'Springen / Fallschirm / Handbremse', sprint: 'Sprinten', crouch: 'Ducken', reload: 'Nachladen', interact: 'Interagieren (Kisten, Bombe, Flagge)', vehicle: 'Fahrzeug ein-/aussteigen', medkit: 'Medkit benutzen', map: 'Karte', nextWeapon: 'Nächste Waffe', slot1: 'Waffe 1 / Loadout 1', slot2: 'Waffe 2 / Loadout 2', slot3: 'Waffe 3 / Loadout 3', slot4: 'Loadout 4' };
+export const keyName = (code) => (code || '—').replace(/^Key/, '').replace(/^Digit/, '').replace('Left', ' L').replace('Right', ' R').replace('Arrow', 'Pfeil ').replace('Space', 'Leertaste').replace('Control', 'Strg').replace('Shift', 'Shift').replace('Backquote', '^');
+
 export const SKIN_BY_ID = Object.fromEntries(SKINS.map((s) => [s.id, s]));
 export const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 
@@ -105,9 +157,10 @@ export const BP_TIERS = 30;
 export const BP_XP = 800;
 export const BP_PREMIUM_PRICE = 1500;
 export function bpReward(t) {
-  const free = t === 15 ? { type: 'skin', id: 'arctic' } : t === 25 ? { type: 'skin', id: 'crimson' } : { type: 'coins', amount: 50 + t * 10 + (t % 5 === 0 ? 150 : 0) };
-  const prem = t === 5 ? { type: 'skin', id: 'desert' } : t === 10 ? { type: 'skin', id: 'toxic' } : t === 20 ? { type: 'skin', id: 'violet' } : t === 30 ? { type: 'skin', id: 'gold' } : { type: 'coins', amount: 120 + t * 20 + (t % 5 === 0 ? 300 : 0) };
-  return { free, prem };
+  const freeItems = { 5: ['color', 'ocean'], 10: ['char', 'desert'], 15: ['skin', 'digital'], 20: ['color', 'toxic'], 25: ['char', 'forest'], 30: ['skin', 'tiger'] };
+  const premItems = { 1: ['color', 'crimson'], 3: ['skin', 'carbon'], 5: ['char', 'arctic'], 7: ['color', 'sun'], 10: ['skin', 'hex'], 12: ['color', 'violet'], 14: ['char', 'night'], 16: ['skin', 'marble'], 18: ['color', 'pink'], 20: ['char', 'blood'], 22: ['color', 'cyan'], 24: ['skin', 'flame'], 26: ['char', 'royal'], 28: ['color', 'snow'], 30: ['char', 'gold'] };
+  const f = freeItems[t], p = premItems[t];
+  return { free: f ? { type: f[0], id: f[1] } : { type: 'coins', amount: 50 + t * 10 }, prem: p ? { type: p[0], id: p[1] } : { type: 'coins', amount: 120 + t * 20 } };
 }
 
 // ---------- Namen ----------

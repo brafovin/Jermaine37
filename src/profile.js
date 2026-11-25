@@ -1,4 +1,4 @@
-import { SKIN_BY_ID, BP_TIERS, BP_XP, BP_PREMIUM_PRICE, bpReward, getRank, rpForMatch } from './data.js';
+import { SKIN_BY_ID, ITEM_BY, DEFAULT_KEYS, BP_TIERS, BP_XP, BP_PREMIUM_PRICE, bpReward, getRank, rpForMatch } from './data.js';
 
 const KEY = 'jermaine37_br_profile_v1';
 
@@ -11,12 +11,16 @@ function fresh() {
     rankedPlayed: 0,
     owned: ['default'],
     skin: 'default',
+    ownedColors: ['orig'],
+    skinColor: 'orig',
+    ownedChars: ['standard'],
+    charSkin: 'standard',
     bpXp: 0,
     bpPremium: false,
     bpClaimed: { free: [], prem: [] },
     seasonEnd: Date.now() + 41 * 86400000,
     stats: { matches: 0, wins: 0, kills: 0, top10: 0, best: 100 },
-    settings: { quality: 'high', sens: 1.0, volume: 0.7, fov: 80, server: '' },
+    settings: { quality: 'high', sens: 1.0, volume: 0.7, fov: 80, server: '', keys: {}, aimToggle: false, swapMouse: false },
   };
 }
 
@@ -29,6 +33,7 @@ export class Profile {
       const raw = localStorage.getItem(KEY);
       if (raw) this.data = { ...this.data, ...JSON.parse(raw) };
       this.data.settings = { ...fresh().settings, ...this.data.settings };
+      const f = fresh(); for (const k of ['ownedColors', 'ownedChars', 'skinColor', 'charSkin']) if (this.data[k] === undefined) this.data[k] = f[k];
     } catch (e) { /* ignore */ }
     this.listeners = new Set();
   }
@@ -46,12 +51,24 @@ export class Profile {
   get bpTier() { return Math.min(BP_TIERS, Math.floor(this.data.bpXp / BP_XP)); }
   get daysLeft() { return Math.max(0, Math.ceil((this.data.seasonEnd - Date.now()) / 86400000)); }
 
-  buySkin(id) {
-    const s = SKIN_BY_ID[id];
-    if (!s || this.data.owned.includes(id) || this.data.coins < s.price) return false;
-    this.data.coins -= s.price; this.data.owned.push(id); this.save(); return true;
+  get keys() { return { ...DEFAULT_KEYS, ...(this.data.settings.keys || {}) }; }
+  _list(type) { return type === 'skin' ? this.data.owned : type === 'color' ? this.data.ownedColors : this.data.ownedChars; }
+  _slot(type) { return type === 'skin' ? 'skin' : type === 'color' ? 'skinColor' : 'charSkin'; }
+  owns(type, id) { return this._list(type).includes(id); }
+  equipped(type) { return this.data[this._slot(type)]; }
+  buy(type, id) {
+    const it = ITEM_BY(type, id); if (!it || this.owns(type, id) || this.data.coins < it.price) return false;
+    this.data.coins -= it.price; this._list(type).push(id); this.save(); return true;
   }
-  equipSkin(id) { if (this.data.owned.includes(id)) { this.data.skin = id; this.save(); } }
+  equip(type, id) { if (this.owns(type, id)) { this.data[this._slot(type)] = id; this.save(); } }
+  unlock(type, id) { if (!this.owns(type, id)) this._list(type).push(id); }
+  buySkin(id) { return this.buy('skin', id); }
+  equipSkin(id) { this.equip('skin', id); }
+  get tokenRound() { return (this.data.stats.matches + 1) % 100 === 0; }
+  claimToken() { // Token-Truhe: Battle Pass gratis, sonst Münzen
+    if (!this.data.bpPremium) { this.data.bpPremium = true; this.save(); return 'premium'; }
+    this.data.coins += BP_PREMIUM_PRICE; this.save(); return 'coins';
+  }
   buyPremium() {
     if (this.data.bpPremium || this.data.coins < BP_PREMIUM_PRICE) return false;
     this.data.coins -= BP_PREMIUM_PRICE; this.data.bpPremium = true; this.save(); return true;
@@ -65,7 +82,7 @@ export class Profile {
     if (!this.canClaim(track, t)) return null;
     const r = bpReward(t)[track];
     if (r.type === 'coins') this.data.coins += r.amount;
-    else if (!this.data.owned.includes(r.id)) this.data.owned.push(r.id);
+    else this.unlock(r.type, r.id);
     this.data.bpClaimed[track].push(t);
     this.save();
     return r;

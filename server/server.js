@@ -1,5 +1,6 @@
 // Online-Server: Matchmaking + Räume + Nachrichten-Relay (Treffer sind clientseitig, kein Anti-Cheat).
-// Modi: "online" (Battle Royale mit echten Spielern) und "bomb" (6 gegen 6, Bombe legen/entschärfen, Server steuert die Runden).
+// Modi: "online" (Battle Royale mit echten Spielern), "bomb" (6 gegen 6, Bombe legen/entschärfen) und "flag" (6 gegen 6, Flaggen einnehmen).
+// Der Server steuert Runden bzw. Flaggen-Punkte.
 // Start:  npm run server   (nur WebSocket, Port 8080)   oder   npm run online   (baut das Spiel und liefert es zusätzlich aus)
 import http from 'node:http';
 import fs from 'node:fs';
@@ -8,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 
 const PORT = +process.env.PORT || 8080, WAIT = +process.env.WAIT_SEC || 20;
-const CFG = { online: { max: +process.env.MAX_PLAYERS || 16, min: +process.env.MIN_PLAYERS || 2 }, bomb: { max: 12, min: +process.env.BOMB_MIN || 2 } };
+const CFG = { online: { max: +process.env.MAX_PLAYERS || 16, min: +process.env.MIN_PLAYERS || 2 }, bomb: { max: 12, min: +process.env.BOMB_MIN || 2 }, flag: { max: 12, min: +process.env.FLAG_MIN || 2 } };
+const FLAG = { target: 150, time: 600, rate: 0.125 };
 const BOMB = { freeze: 8, live: 120, planted: 40, end: 5, winRounds: 4 };
 const dist = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.bin': 'application/octet-stream' };
@@ -21,7 +23,7 @@ const server = http.createServer((req, res) => {
   res.writeHead(200, { 'content-type': MIME[path.extname(f)] || 'application/octet-stream' }); fs.createReadStream(f).pipe(res);
 });
 const wss = new WebSocketServer({ server });
-let nextId = 1; const queues = { online: [], bomb: [] }, minAt = { online: 0, bomb: 0 };
+let nextId = 1; const queues = { online: [], bomb: [], flag: [] }, minAt = { online: 0, bomb: 0, flag: 0 };
 const rooms = new Set();
 const send = (c, m) => { if (c.ws.readyState === 1) c.ws.send(JSON.stringify(m)); };
 const bcast = (room, m, except) => { for (const c of room.clients) if (c !== except) send(c, m); };
@@ -29,14 +31,31 @@ const bcast = (room, m, except) => { for (const c of room.clients) if (c !== exc
 function startRoom(list, mode) {
   const room = { mode, clients: list, seed: (Math.random() * 1e9) | 0, ready: 0, started: false };
   rooms.add(room);
-  if (mode === 'bomb') list.forEach((c, i) => { c.team = i % 2; });
-  const players = list.map((c, i) => ({ id: c.id, name: c.name, rank: c.rank, skin: c.skin, index: i, team: c.team ?? 0 }));
+  if (mode === 'bomb' || mode === 'flag') list.forEach((c, i) => { c.team = i % 2; });
+  const players = list.map((c, i) => ({ id: c.id, name: c.name, rank: c.rank, skin: c.skin, cskin: c.cskin, index: i, team: c.team ?? 0 }));
   list.forEach((c, i) => { c.room = room; c.alive = true; c.ready = false; send(c, { t: 'start', mode, seed: room.seed, you: c.id, index: i, team: c.team ?? 0, count: list.length, players }); });
   room.timer = setTimeout(() => go(room), 70000);
   console.log(`Raum (${mode}) gestartet mit ${list.length} Spielern (Seed ${room.seed})`);
 }
-function go(room) { if (room.started) return; room.started = true; clearTimeout(room.timer); bcast(room, { t: 'go' }); if (room.mode === 'bomb') bombInit(room); }
+function go(room) { if (room.started) return; room.started = true; clearTimeout(room.timer); bcast(room, { t: 'go' }); if (room.mode === 'bomb') bombInit(room); if (room.mode === 'flag') flagInit(room); }
 const alive = (room) => room.clients.filter((c) => c.alive);
+
+// ---------- Flaggen-Modus ----------
+function flagInit(room) { room.flags = [0, 1, 2].map(() => ({ p: 0, owner: -1 })); room.score = [0, 0]; room.t0 = Date.now(); room.endAt = room.t0 + FLAG.time * 1000; room.lastScore = room.t0; room.lastBc = 0; room.over = false; }
+function flagEnd(room, winner, forfeit) { if (room.over) return; room.over = true; bcast(room, { t: 'matchend', winner, score: room.score, forfeit: !!forfeit }); }
+function flagTick(room, now) {
+  if (room.over) return; const dt = 0.25;
+  room.flags.forEach((f, i) => {
+    const cnt = [0, 0]; for (const c of room.clients) if (c.alive && c.capFlag === i && now - c.capAt < 1200) cnt[c.team]++;
+    if (cnt[0] && cnt[1]) { /* umkämpft */ } else if (cnt[0]) f.p = Math.max(-1, f.p - Math.min(cnt[0], 3) * FLAG.rate * dt); else if (cnt[1]) f.p = Math.min(1, f.p + Math.min(cnt[1], 3) * FLAG.rate * dt);
+    if (f.p <= -1) f.owner = 0; else if (f.p >= 1) f.owner = 1; else if ((f.owner === 0 && f.p > -0.5) || (f.owner === 1 && f.p < 0.5)) f.owner = -1;
+  });
+  while (now - room.lastScore >= 1000) { room.lastScore += 1000; for (const f of room.flags) if (f.owner >= 0) room.score[f.owner]++; }
+  if (room.score[0] >= FLAG.target || room.score[1] >= FLAG.target) return flagEnd(room, room.score[0] >= FLAG.target ? 0 : 1);
+  if (now >= room.endAt) { const own = [0, 1].map((t) => room.flags.filter((f) => f.owner === t).length); return flagEnd(room, room.score[0] !== room.score[1] ? (room.score[0] > room.score[1] ? 0 : 1) : own[0] >= own[1] ? 0 : 1); }
+  if (now - room.lastBc >= 500) { room.lastBc = now; bcast(room, { t: 'fstate', f: room.flags.map((f) => [Math.round(f.p * 1000) / 1000, f.owner]), score: room.score, left: Math.max(0, (room.endAt - now) / 1000) }); }
+}
+setInterval(() => { const now = Date.now(); for (const room of rooms) if (room.mode === 'flag' && room.started) flagTick(room, now); }, 250);
 
 // ---------- Bomben-Modus ----------
 function bombInit(room) { room.score = [0, 0]; room.round = 0; room.attTeam = 0; room.over = false; startRound(room); }
@@ -76,7 +95,7 @@ function leave(c) {
   const room = c.room; if (!room) return;
   if (c.alive) { c.alive = false; bcast(room, { t: 'dead', id: c.id, by: null, w: 'Verlassen', place: alive(room).length + 1, left: true }, c); }
   room.clients = room.clients.filter((x) => x !== c);
-  if (room.mode === 'bomb') checkRound(room); else if (c.alive === false) checkEnd(room);
+  if (room.mode === 'bomb') checkRound(room); else if (room.mode === 'flag') { const t = [0, 1].map((k) => room.clients.filter((x) => x.team === k).length); if (room.started && (!t[0] || !t[1])) flagEnd(room, t[0] ? 0 : 1, true); } else if (c.alive === false) checkEnd(room);
   if (!room.clients.length) { clearTimeout(room.timer); rooms.delete(room); }
 }
 function checkEnd(room) { const a = alive(room); if (room.started && a.length <= 1) bcast(room, { t: 'end', winner: a[0] ? a[0].id : null }); }
@@ -86,7 +105,7 @@ wss.on('connection', (ws) => {
   ws.on('message', (raw) => {
     let m; try { m = JSON.parse(raw); } catch { return; }
     if (m.t === 'queue') {
-      c.name = String(m.name || 'Spieler').slice(0, 16); c.rank = m.rank | 0; c.skin = String(m.skin || 'default'); const mode = m.mode === 'bomb' ? 'bomb' : 'online';
+      c.name = String(m.name || 'Spieler').slice(0, 16); c.rank = m.rank | 0; c.skin = String(m.skin || 'default'); c.cskin = String(m.cskin || 'standard'); const mode = m.mode === 'bomb' ? 'bomb' : m.mode === 'flag' ? 'flag' : 'online';
       if (!c.room && !Object.values(queues).some((q) => q.includes(c))) { c.mode = mode; queues[mode].push(c); }
       return;
     }
@@ -97,15 +116,18 @@ wss.on('connection', (ws) => {
     if (m.t === 's' || m.t === 'shot' || m.t === 'crate') { m.id = c.id; bcast(room, m, c); return; }
     if (m.t === 'hit') {
       const to = room.clients.find((x) => x.id === m.to);
-      if (to && to.alive && !(room.mode === 'bomb' && (to.team === c.team || room.phase === 'freeze' || room.phase === 'end'))) send(to, { t: 'hit', from: c.id, dmg: Math.min(400, +m.dmg || 0), head: !!m.head, w: m.w, x: m.x, z: m.z });
+      const tm = room.mode === 'bomb' || room.mode === 'flag';
+      if (to && to.alive && !(tm && to.team === c.team) && !(room.mode === 'bomb' && (room.phase === 'freeze' || room.phase === 'end')) && !(to.prot > Date.now())) send(to, { t: 'hit', from: c.id, dmg: Math.min(400, +m.dmg || 0), head: !!m.head, w: m.w, x: m.x, z: m.z });
       return;
     }
     if (m.t === 'dead') {
       if (!c.alive) return; c.alive = false; const place = alive(room).length + 1;
       bcast(room, { t: 'dead', id: c.id, by: m.by ?? null, w: m.w || '', place, x: m.x, y: m.y, z: m.z, loot: m.loot }, null);
-      if (room.mode === 'bomb') checkRound(room); else checkEnd(room);
+      if (room.mode === 'bomb') checkRound(room); else if (room.mode === 'online') checkEnd(room);
       return;
     }
+    if (m.t === 'cap' && room.mode === 'flag' && c.alive) { c.capFlag = m.f | 0; c.capAt = Date.now(); return; }
+    if (m.t === 'alive' && room.mode === 'flag' && !c.alive) { c.alive = true; c.prot = Date.now() + 2500; c.capFlag = -1; bcast(room, { t: 'respawn', id: c.id }, null); return; }
     if (room.mode !== 'bomb') return;
     if (m.t === 'plant' && room.phase === 'live' && c.team === room.attTeam && c.alive && !room.planted) {
       room.planted = true; room.phase = 'planted'; room.deadline = Date.now() + BOMB.planted * 1000; bcast(room, { t: 'planted', by: c.id, site: m.site | 0, dur: BOMB.planted });
@@ -127,4 +149,4 @@ setInterval(() => {
   }
 }, 1000);
 
-server.listen(PORT, () => console.log(`Online-Server läuft auf Port ${PORT} (BR min ${CFG.online.min}/max ${CFG.online.max}, Bombe min ${CFG.bomb.min}/max 12, Wartezeit ${WAIT}s). Spiel: http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`Online-Server läuft auf Port ${PORT} (BR min ${CFG.online.min}/max ${CFG.online.max}, Bombe min ${CFG.bomb.min}/max 12, Flaggen min ${CFG.flag.min}/max 12, Wartezeit ${WAIT}s). Spiel: http://localhost:${PORT}`));

@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { RANKS, WEAPONS, WEAPON_BY_ID, SKINS, SKIN_BY_ID, RARITY, AMMO, BP_TIERS, BP_XP, BP_PREMIUM_PRICE, bpReward, hex, PLACEMENT_MATCHES } from './data.js';
+import { RANKS, WEAPONS, WEAPON_BY_ID, SKINS, SKIN_BY_ID, COLORS, CHARS, ITEMS, ITEM_BY, ITEM_LABEL, CHAR_BY_ID, resolveSkin, RARITY, AMMO, BP_TIERS, BP_XP, BP_PREMIUM_PRICE, bpReward, hex, PLACEMENT_MATCHES } from './data.js';
 import { badgeSVG } from './badges.js';
 import { makeSoldier } from './weaponmodel.js';
 import { xpForLevel } from './profile.js';
+import { controlsUI } from './controls.js';
 
 export class Lobby {
   constructor({ renderer, profile, audio, root, onPlay, onQuality }) {
@@ -37,8 +38,8 @@ export class Lobby {
   }
   rebuildSoldier() {
     this.soldierHolder.clear();
-    const skin = SKIN_BY_ID[this.profile.data.skin] || SKINS[0];
-    this.soldier = makeSoldier(skin, WEAPON_BY_ID[this.previewWeapon]); this.soldierHolder.add(this.soldier);
+    const d = this.profile.data, skin = resolveSkin(d.skin, d.skinColor);
+    this.soldier = makeSoldier(skin, WEAPON_BY_ID[this.previewWeapon], (CHAR_BY_ID[d.charSkin] || CHARS[0]).tint); this.soldierHolder.add(this.soldier);
   }
   resize() { this.cam.aspect = innerWidth / innerHeight; this.cam.updateProjectionMatrix(); }
   start() {
@@ -75,6 +76,7 @@ export class Lobby {
         <button class="mode on" data-m="br"><b>BATTLE ROYALE</b><small>100 Spieler · Verdansk Island</small></button>
         <button class="mode" data-m="online"><b>ONLINE</b><small>Battle Royale · echte Spieler</small></button>
         <button class="mode" data-m="bomb"><b>BOMBE 6v6</b><small>Online · Bombe legen &amp; entschärfen</small></button>
+        <button class="mode" data-m="flag"><b>FLAGGEN 6v6</b><small>Online · Flaggen einnehmen</small></button>
         <button class="mode" data-m="ranked"><b>RANKED</b><small id="lb-rk-sub"></small><div class="mode-badge" id="lb-mbadge"></div></button>
       </div>
       <button class="play" id="lb-play"><span>▶ SPIEL STARTEN</span><small>MATCH FINDEN</small></button>
@@ -104,29 +106,40 @@ export class Lobby {
     q('#lb-season').textContent = 'SAISON 01';
   }
   openPanel(name) {
+    if (this._ctl && name !== 'settings') { this._ctl.destroy(); this._ctl = null; }
     this.panelName = name; const b = this.root.querySelector('#panel-body'), pan = this.root.querySelector('#panel');
     pan.style.display = 'flex';
     ({ shop: () => this.pShop(b), bp: () => this.pBP(b), arsenal: () => this.pArsenal(b), rank: () => this.pRank(b), settings: () => this.pSettings(b), account: () => this.pAccount(b) })[name]();
   }
-  closePanel() { this.panelName = null; const p = this.root.querySelector('#panel'); if (p) p.style.display = 'none'; }
+  closePanel() { if (this._ctl) { this._ctl.destroy(); this._ctl = null; } this.panelName = null; const p = this.root.querySelector('#panel'); if (p) p.style.display = 'none'; }
   rerender() { if (this.panelName) this.openPanel(this.panelName); this.refreshTop(); }
 
-  skinCard(s, mode) {
-    const own = this.profile.data.owned.includes(s.id), eq = this.profile.data.skin === s.id, rar = RARITY[s.rarity];
+  swatchCss(type, it) {
+    if (type === 'skin') return it.camo ? `linear-gradient(135deg,${it.camo[0]} 0 34%,${it.camo[1]} 35% 66%,${it.camo[2]} 67%)` : `linear-gradient(135deg,${hex(it.color)} 0%,${hex(it.color)} 45%,${hex(it.accent)} 46%,${hex(it.accent)} 56%,${hex(it.color)} 57%)`;
+    if (type === 'color') return `radial-gradient(circle at 35% 30%,#fffa,${it.hex ? hex(it.hex) : '#8a9096'} 62%,#0006)`;
+    return `linear-gradient(160deg,${hex(it.tint)},#1c2024)`;
+  }
+  itemCard(type, it) {
+    const P = this.profile, own = P.owns(type, it.id), eq = P.equipped(type) === it.id, rar = RARITY[it.rarity];
+    const glow = type === 'skin' && it.emissive ? `;box-shadow:inset 0 0 40px ${hex(it.emissive)}aa` : '';
     return `<div class="card skin ${eq ? 'eq' : ''}" style="--rc:${rar.color}">
-      <div class="swatch" style="background:linear-gradient(135deg,${hex(s.color)} 0%,${hex(s.color)} 45%,${hex(s.accent)} 46%,${hex(s.accent)} 56%,${hex(s.color)} 57%);box-shadow:inset 0 0 40px ${s.emissive ? hex(s.emissive) + 'aa' : '#0006'}"></div>
-      <div class="cn">${s.name}</div><div class="cr">${rar.name}</div>
-      ${own ? `<button class="btn sm ${eq ? 'ghost' : ''}" data-eq="${s.id}">${eq ? 'AUSGERÜSTET' : 'AUSRÜSTEN'}</button>` : `<button class="btn sm gold" data-buy="${s.id}" ${this.profile.data.coins < s.price ? 'disabled' : ''}><i class="coin"></i>${s.price}</button>`}
+      <div class="swatch ${type === 'color' ? 'round' : ''}" style="background:${this.swatchCss(type, it)}${glow}"></div>
+      <div class="cn">${it.name}</div><div class="cr">${rar.name}</div>
+      ${own ? `<button class="btn sm ${eq ? 'ghost' : ''}" data-t="${type}" data-eq="${it.id}">${eq ? 'AUSGERÜSTET' : 'AUSRÜSTEN'}</button>` : `<button class="btn sm gold" data-t="${type}" data-buy="${it.id}" ${P.data.coins < it.price ? 'disabled' : ''}><i class="coin"></i>${it.price}</button>`}
     </div>`;
   }
   pShop(b) {
-    b.innerHTML = `<h2>SHOP</h2><p class="sub">Waffen-Skins · Münzen verdienst du mit Bargeld aus Matches.</p><div class="grid">${SKINS.map((s) => this.skinCard(s)).join('')}</div>`;
-    b.querySelectorAll('[data-buy]').forEach((e) => (e.onclick = () => { if (this.profile.buySkin(e.dataset.buy)) { this.audio.pickup(); this.profile.equipSkin(e.dataset.buy); this.rebuildSoldier(); this.rerender(); } }));
-    b.querySelectorAll('[data-eq]').forEach((e) => (e.onclick = () => { this.profile.equipSkin(e.dataset.eq); this.audio.click(); this.rebuildSoldier(); this.rerender(); }));
+    const tab = this.shopTab || 'skin', tabs = [['skin', 'Waffenlackierungen'], ['color', 'Skin-Farben'], ['char', 'Charakter-Skins']];
+    const hint = { skin: 'Muster und Lacke für alle Waffen.', color: 'Färbt die ausgerüstete Waffenlackierung um.', char: 'Ändert das Aussehen deines Soldaten.' }[tab];
+    b.innerHTML = `<h2>SHOP</h2><div class="tabs">${tabs.map(([k, n]) => `<button class="${k === tab ? 'on' : ''}" data-tab="${k}">${n}</button>`).join('')}</div><p class="sub">${hint} Münzen verdienst du mit Bargeld aus Matches, mehr gibt es im Battle Pass.</p><div class="grid">${ITEMS[tab].map((it) => this.itemCard(tab, it)).join('')}</div>`;
+    b.querySelectorAll('[data-tab]').forEach((e) => (e.onclick = () => { this.shopTab = e.dataset.tab; this.audio.click(); this.openPanel('shop'); }));
+    b.querySelectorAll('[data-buy]').forEach((e) => (e.onclick = () => { const t = e.dataset.t, id = e.dataset.buy; if (this.profile.buy(t, id)) { this.audio.pickup(); this.profile.equip(t, id); this.rebuildSoldier(); this.rerender(); } }));
+    b.querySelectorAll('[data-eq]').forEach((e) => (e.onclick = () => { this.profile.equip(e.dataset.t, e.dataset.eq); this.audio.click(); this.rebuildSoldier(); this.rerender(); }));
   }
   rewardHtml(r) {
     if (r.type === 'coins') return `<div class="rw"><i class="coin big"></i><b>${r.amount}</b></div>`;
-    const s = SKIN_BY_ID[r.id]; return `<div class="rw skin" style="--rc:${RARITY[s.rarity].color}"><div class="sw" style="background:linear-gradient(135deg,${hex(s.color)} 50%,${hex(s.accent)} 51%)"></div><b>${s.name}</b></div>`;
+    const it = ITEM_BY(r.type, r.id);
+    return `<div class="rw skin" style="--rc:${RARITY[it.rarity].color}"><div class="sw ${r.type === 'color' ? 'round' : ''}" style="background:${this.swatchCss(r.type, it)}"></div><b>${it.name}</b><small>${ITEM_LABEL[r.type]}</small></div>`;
   }
   pBP(b) {
     const p = this.profile, d = p.data, tier = p.bpTier, into = d.bpXp - tier * BP_XP;
@@ -170,6 +183,7 @@ export class Lobby {
       <p class="sub">RP pro Ranked-Match: Sieg +60 · Top 5 +40 · Top 10 +28 · Top 25 +14 · Top 50 ±0 · darunter Verlust. Dazu +5 RP pro Kill (max. 10). Die Gegner in der Lobby werden nach deinem Rang ausgewählt.</p>`;
   }
   pSettings(b) {
+    if (this._ctl) { this._ctl.destroy(); this._ctl = null; }
     const s = this.profile.data.settings;
     b.innerHTML = `<h2>EINSTELLUNGEN</h2><div class="set">
       <label>Grafikqualität <select id="s-q">${[['low', 'Niedrig'], ['medium', 'Mittel'], ['high', 'Hoch'], ['ultra', 'Ultra (hohe Auflösung)']].map(([k, n]) => `<option value="${k}" ${s.quality === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
@@ -178,7 +192,8 @@ export class Lobby {
       <label>Sichtfeld (FOV) <input type="range" id="s-fov" min="60" max="110" step="1" value="${s.fov}"><b id="s-fov-v">${s.fov}</b></label>
       <label>Server-Adresse (Online) <input id="s-server" type="text" placeholder="ws://localhost:8080" value="${s.server || ''}"></label>
       <label>Lautstärke <input type="range" id="s-vol" min="0" max="1" step="0.05" value="${s.volume}"><b id="s-vol-v">${s.volume}</b></label>
-      <h3>Steuerung</h3><div class="keys"><span><kbd>WASD</kbd> Bewegen</span><span><kbd>Shift</kbd> Sprinten</span><span><kbd>Leertaste</kbd> Springen / Fallschirm</span><span><kbd>Strg/C</kbd> Ducken</span><span><kbd>Maus L</kbd> Schießen</span><span><kbd>Maus R</kbd> Zielen</span><span><kbd>R</kbd> Nachladen</span><span><kbd>1-3 / Rad</kbd> Waffe wechseln</span><span><kbd>F halten</kbd> Kiste öffnen</span><span><kbd>H</kbd> Medkit</span><span><kbd>M</kbd> Karte</span><span><kbd>Esc</kbd> Pause</span></div></div>`;
+      <h3>Steuerung ändern</h3><div id="s-ctl"></div></div>`;
+    this._ctl = controlsUI(b.querySelector('#s-ctl'), this.profile);
     const bind = (id, key, cb) => { const el = b.querySelector('#' + id); el.oninput = () => { s[key] = key === 'quality' || key === 'server' ? el.value.trim() : +el.value; const v = b.querySelector('#' + id + '-v'); if (v) v.textContent = el.value; this.profile.save(); cb && cb(); }; };
     bind('s-q', 'quality', () => this.onQuality()); bind('s-server', 'server'); bind('s-sens', 'sens'); bind('s-fov', 'fov'); bind('s-vol', 'volume', () => this.audio.setVolume(s.volume));
   }

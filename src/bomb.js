@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { WEAPON_BY_ID } from './data.js';
+import { WEAPON_BY_ID, keyName } from './data.js';
 import { mulberry32 } from './world.js';
 
 const SITE_R = 7, PLANT_T = 4, DEFUSE_T = 6;
@@ -22,6 +22,7 @@ export function installBomb(Match) {
     const u = [Math.cos(th), Math.sin(th)], v = [-u[1], u[0]];
     const snap = (x, z) => { let best = t.spots[0], bd = 1e9; for (const s of t.spots) { const d = Math.hypot(s[0] - x, s[1] - z); if (d < bd) { bd = d; best = s; } } return best; };
     const sites = [0, 1].map((i) => { const sg = i ? 1 : -1, s = snap(t.x + u[0] * R * 0.12 + v[0] * R * 0.38 * sg, t.z + u[1] * R * 0.12 + v[1] * R * 0.38 * sg); return { x: s[0], z: s[1], name: i ? 'B' : 'A' }; });
+    if (this.flagMode) { const c = snap(t.x, t.z); sites.splice(1, 0, { x: c[0], z: c[1], name: 'B' }); sites[0].name = 'A'; sites[2].name = 'C'; }
     this.arena = { t, R, u, v, sites, spawnR: R * 0.78 };
     this.zone = { cx: t.x, cz: t.z, r: R, tcx: t.x, tcz: t.z, tr: R };
   };
@@ -39,6 +40,7 @@ export function installBomb(Match) {
     if (!this.bomb) return;
     const on = this.opts.online, w = this.world;
     this.attTeam = 0; this.score = [0, 0]; this.round = 0; this.phase = 'wait'; this.frozen = true; this.planted = false; this.phaseEnd = performance.now() + 9000; this.bombObjs = []; this.teamIdx = {};
+    if (this.flagMode) { this.phase = 'live'; this.freezeUntil = performance.now() + 8000; this.flagLeft = 600; this.flagLeftAt = performance.now(); }
     const cnt = [0, 0]; for (const pl of on.players) this.teamIdx[pl.id] = cnt[pl.team]++;
     w.crates.length = 0; w.baseCrates = 0; w.crateMesh.count = 0; w.beamMesh.count = 0;
     this.hud.el('h-zone').style.display = 'none';
@@ -52,6 +54,21 @@ export function installBomb(Match) {
     });
     this.hud.el('bombhud').style.display = 'block';
     const n = this.net;
+    if (this.flagMode) {
+      this.flagObjs = this.arena.sites.map((s) => {
+        const y = w.heightAt(s.x, s.z), pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 7.5, 8), new THREE.MeshStandardMaterial({ color: 0xcfd2d6, metalness: 0.7, roughness: 0.3 }));
+        pole.position.set(s.x, y + 3.75, s.z);
+        const cloth = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.4), new THREE.MeshStandardMaterial({ color: 0xbbbbbb, side: THREE.DoubleSide, roughness: 0.7 })); cloth.position.set(s.x + 1.25, y + 1.6, s.z);
+        this.scene.add(pole, cloth); this.bombObjs.push(pole, cloth); return { pole, cloth, y };
+      });
+      this.flagList = this.arena.sites.map((s) => ({ x: s.x, z: s.z, name: s.name, color: '#bbbbbb' }));
+      this.flagState = this.arena.sites.map(() => [0, -1]);
+      this.hud.el('loadout').style.display = 'block'; this.hud.banner('FLAGGEN EINNEHMEN', 'Stehe in den Ringen A, B, C – wer mehr Flaggen hält, sammelt Punkte', 5000);
+      const p0 = this.player; p0.armor = 50; p0.ammo = { light: 120, medium: 0, heavy: 0, shells: 0, rocket: 0 }; this.loadoutPick(0, true);
+      n.on('fstate', (m) => this.onFState(m)).on('respawn', (m) => this.onRespawn(m)).on('matchend', (m) => this.onMatchEnd(m));
+      for (const r of this.remotes.values()) { const sp = this.bombSpawn(this.sideOf(r.team), this.teamIdx[r.id]); r.x = r.tx = sp.x; r.z = r.tz = sp.z; r.y = r.ty = sp.y; r.st = 'ground'; }
+      this.alive = on.players.length; return;
+    }
     n.on('round', (m) => this.onRound(m)).on('phase', (m) => this.onPhase(m)).on('planted', (m) => this.onPlanted(m)).on('defused', () => this.onDefused())
       .on('roundend', (m) => this.onRoundEnd(m)).on('matchend', (m) => this.onMatchEnd(m));
     for (const r of this.remotes.values()) { const sp = this.bombSpawn(this.sideOf(r.team), this.teamIdx[r.id]); r.x = r.tx = sp.x; r.z = r.tz = sp.z; r.y = r.ty = sp.y; }
@@ -90,11 +107,51 @@ export function installBomb(Match) {
     this.hud.banner(win ? 'RUNDE GEWONNEN' : 'RUNDE VERLOREN', why, 4200);
     if (m.reason === 'bomb' && this.bombSite && this.bombModel) { this.explode(new THREE.Vector3(this.bombSite.x, this.world.heightAt(this.bombSite.x, this.bombSite.z) + 0.5, this.bombSite.z), { splash: 18, dmg: 250, name: 'Bombe' }, null); this.scene.remove(this.bombModel); this.bombModel = null; }
   };
+  // ---------- Flaggen-Modus ----------
+  const FLAG_COL = [0xff9a3a, 0x4aa8ff], NEUTRAL = 0xbbbbbb;
+  P.onFState = function (m) {
+    this.score = m.score; this.flagState = m.f; this.flagLeft = m.left; this.flagLeftAt = performance.now();
+    m.f.forEach(([p, owner], i) => {
+      const o = this.flagObjs[i], col = new THREE.Color(NEUTRAL); if (p < 0) col.lerp(new THREE.Color(FLAG_COL[0]), -p); else if (p > 0) col.lerp(new THREE.Color(FLAG_COL[1]), p);
+      o.cloth.material.color.copy(col); o.cloth.position.y = o.y + 1.6 + 4.6 * Math.abs(p);
+      const ring = this.bombObjs[i * 3], pil = this.bombObjs[i * 3 + 1]; ring.material.color.copy(col); pil.material.color.copy(col);
+      this.flagList[i].color = '#' + col.getHexString();
+    });
+  };
+  P.onRespawn = function (m) {
+    const r = this.remotes.get(m.id); if (!r || r.alive) return; const sp = this.bombSpawn(this.sideOf(r.team), this.teamIdx[r.id]);
+    r.alive = true; r.group.visible = true; r.x = r.tx = sp.x; r.z = r.tz = sp.z; r.y = r.ty = sp.y; this.countAlive();
+  };
+  P.flagRespawn = function () {
+    const p = this.player; this.respawnAt = 0; p.alive = true; p.hp = 100; p.armor = 50; p.state = 'ground'; p.reload = 0; p.healT = 0; p.crouch = 0; p.ads = 0; p.interact = 0; this.over = false;
+    this.bombPlace(p); p.ammo = { light: 120, medium: 0, heavy: 0, shells: 0, rocket: 0 }; this.loadoutPick(this.pickedLoadout || 0, true);
+    this.net.send({ t: 'alive' }); this.countAlive(); for (const r of this.remotes.values()) if (r.alive) r.group.visible = true;
+    this.hud.setPrompt(''); this.hud.setHealth(p.hp, p.armor, 0); this.hud.banner('RESPAWN', 'Zurück ins Gefecht', 1500);
+  };
+  P.flagInteract = function (dt) {
+    const p = this.player, hud = this.hud;
+    if (!p.alive || p.state !== 'ground') { if (p.state === 'ground') hud.setPrompt(''); return; }
+    const i = this.arena.sites.findIndex((s) => Math.hypot(p.pos.x - s.x, p.pos.z - s.z) < SITE_R + 1);
+    if (this.frozen || i < 0) { hud.setPrompt(''); return; }
+    const [pr, ow] = this.flagState[i] || [0, -1], mine = this.myTeam === 0 ? -pr : pr;
+    hud.setPrompt(ow === this.myTeam ? `Flagge ${this.arena.sites[i].name}: gehört deinem Team` : `Flagge ${this.arena.sites[i].name} wird eingenommen… ${Math.round(Math.max(0, mine) * 100)} %`);
+    this.capT = (this.capT || 0) - dt; if (this.capT <= 0) { this.capT = 0.4; this.net.send({ t: 'cap', f: i }); }
+  };
+  P.flagTick = function () {
+    const now = performance.now();
+    if (this.frozen && now >= this.freezeUntil) { this.frozen = false; this.hud.el('loadout').style.display = 'none'; this.hud.banner('LOS!', 'Nimm die Flaggen ein', 1800); this.audio.warn(); }
+    if (!this._bhT || now - this._bhT > 200) {
+      this._bhT = now; const my = this.myTeam, left = Math.max(0, this.flagLeft - (now - this.flagLeftAt) / 1000), mm = Math.floor(left / 60), ss = String(Math.floor(left % 60)).padStart(2, '0');
+      const css = (hex) => '#' + hex.toString(16).padStart(6, '0'), dots = this.flagState.map(([p], i) => { const c = new THREE.Color(NEUTRAL); if (p < 0) c.lerp(new THREE.Color(FLAG_COL[0]), -p); else if (p > 0) c.lerp(new THREE.Color(FLAG_COL[1]), p); return `<span class="fdot" style="background:#${c.getHexString()}">${this.arena.sites[i].name}</span>`; }).join('');
+      let mine = this.player.alive ? 1 : 0, enemy = 0; for (const r of this.remotes.values()) if (r.alive) { if (r.team === my) mine++; else enemy++; }
+      this.hud.setBombHud(`<div class="bh"><span style="color:${TEAM_COL[my]}">DEIN TEAM <b>${this.score[my]}</b></span><i>:</i><span style="color:${TEAM_COL[1 - my]}"><b>${this.score[1 - my]}</b> GEGNER</span></div><div class="bt">${mm}:${ss}</div><div class="bs">Ziel: 150 Punkte · ${mine} vs ${enemy}</div><div class="fl">${dots}</div>`);
+    }
+  };
   P.onMatchEnd = function (m) {
     if (this.matchDone) return; this.matchDone = true; this.over = true; if (document.pointerLockElement) document.exitPointerLock();
     const p = this.player, win = m.winner === this.myTeam, sc = m.score;
     const res = this.profile.applyMatch({ placement: win ? 1 : 20, kills: p.kills, surviveSec: Math.floor(this.time), cash: p.kills * 100 + (win ? 300 : 100), ranked: false });
-    const el = this.hud.results(`<div class="res-box"><div class="res-title ${win ? 'win' : ''}">${win ? 'SIEG!' : 'NIEDERLAGE'}</div><div class="res-sub">Bombe 6 gegen 6${m.forfeit ? ' · Gegner hat aufgegeben' : ''}</div>
+    const el = this.hud.results(`<div class="res-box"><div class="res-title ${win ? 'win' : ''}">${win ? 'SIEG!' : 'NIEDERLAGE'}</div><div class="res-sub">${this.flagMode ? 'Flaggen' : 'Bombe'} 6 gegen 6${m.forfeit ? ' · Gegner hat aufgegeben' : ''}</div>
       <div class="res-rank"><b style="color:${TEAM_COL[this.myTeam]}">${sc[this.myTeam]}</b> : <b style="color:${TEAM_COL[1 - this.myTeam]}">${sc[1 - this.myTeam]}</b></div>
       <div class="res-grid"><div><b>${p.kills}</b><span>Kills</span></div><div><b>${win ? 'Sieg' : 'Niederl.'}</b><span>Ergebnis</span></div><div><b>+${res.xp}</b><span>XP</span></div><div><b>+$${res.coins}</b><span>Münzen</span></div></div>
       ${res.levelUp ? `<div class="res-lvl">LEVEL UP! Du bist jetzt Level ${res.level}</div>` : ''}<button class="btn big" id="res-back">ZURÜCK ZUR LOBBY</button></div>`);
@@ -103,6 +160,7 @@ export function installBomb(Match) {
   P.countAlive = function () { let n = this.player.alive ? 1 : 0; for (const r of this.remotes.values()) if (r.alive) n++; this.alive = n; };
   P.loadoutPick = function (i, silent) {
     const p = this.player, [, id] = PRESETS[i] || PRESETS[0], def = WEAPON_BY_ID[id];
+    if (!p.alive) { this.pickedLoadout = i; this.hud.toast(`Respawn mit: ${def.name}`, '#ffd24a'); return; }
     p.slots = [{ def, mag: def.mag }, { def: WEAPON_BY_ID.sidekick, mag: 12 }, null]; p.cur = 0; p.swap = 0.2; p.ammo[def.ammo] = Math.max(p.ammo[def.ammo], def.mag * 3); p.ammo.light = Math.max(p.ammo.light, 60);
     this.refreshWeaponUI(); if (!silent) this.audio.pickup(); this.pickedLoadout = i;
   };
@@ -117,17 +175,19 @@ export function installBomb(Match) {
     const p = this.player; if (!p.alive) return;
     p.alive = false; p.hp = 0; this.hud.setHealth(0, 0, 0); this.netDead(weapon);
     if (quit) { this.exit(); return; }
-    p.state = 'spectate'; this.specI = 0; this.countAlive(); this.hud.banner('ELIMINIERT', `von ${killer}`, 2200);
+    p.state = 'spectate'; this.specI = 0; this.countAlive(); this.hud.banner('ELIMINIERT', this.flagMode ? `von ${killer} · Respawn in 5 s` : `von ${killer}`, 2200);
+    if (this.flagMode) this.respawnAt = performance.now() + 5000;
   };
   P.updateSpectate = function () {
     const p = this.player, cam = this.camera; this.viewGroup.visible = false; this.hud.scope(false, true); this.mouse.dx = this.mouse.dy = 0;
+    let respawnLeft = 0; if (this.flagMode && this.respawnAt) { respawnLeft = Math.ceil((this.respawnAt - performance.now()) / 1000); if (respawnLeft <= 0) { this.flagRespawn(); return; } }
     let list = [...this.remotes.values()].filter((r) => r.alive && r.team === this.myTeam); if (!list.length) list = [...this.remotes.values()].filter((r) => r.alive);
     for (const r of this.remotes.values()) if (r.alive) r.group.visible = true;
     if (!list.length) { this.hud.setPrompt('Warte auf die nächste Runde…'); return; }
     if (this.mouse.lClick) { this.specI = (this.specI || 0) + 1; this.mouse.lClick = false; }
     const r = list[(this.specI || 0) % list.length]; r.group.visible = false;
     cam.position.set(r.x, r.y + 1.6, r.z); cam.rotation.order = 'YXZ'; cam.rotation.set(r.pitch || 0, r.yaw, 0); p.pos.set(r.x, r.y, r.z); p.yaw = r.yaw;
-    this.hud.setPrompt(`Zuschauen: ${r.name} · Klick = nächster Spieler`);
+    this.hud.setPrompt(respawnLeft ? `Respawn in ${respawnLeft} s · Taste 1–4: Waffe für den Respawn wählen` : `Zuschauen: ${r.name} · Klick = nächster Spieler`);
   };
   P.bombInteract = function (dt) {
     const p = this.player, hud = this.hud, att = this.myTeam === this.attTeam;
@@ -136,15 +196,16 @@ export function installBomb(Match) {
     let prompt = '', need = 0, act = null;
     if (att && this.phase === 'live' && !this.planted && !this.plantSent) {
       const i = this.arena.sites.findIndex((s) => Math.hypot(p.pos.x - s.x, p.pos.z - s.z) < SITE_R);
-      if (i >= 0) { prompt = `F halten: Bombe legen (Platz ${this.arena.sites[i].name})`; need = PLANT_T; act = () => { this.plantSent = true; this.net.send({ t: 'plant', site: i }); }; }
+      if (i >= 0) { prompt = `${keyName(this.bind.interact)} halten: Bombe legen (Platz ${this.arena.sites[i].name})`; need = PLANT_T; act = () => { this.plantSent = true; this.net.send({ t: 'plant', site: i }); }; }
     } else if (!att && this.planted && this.bombPos && Math.hypot(p.pos.x - this.bombPos.x, p.pos.z - this.bombPos.z) < 3.4) {
-      prompt = 'F halten: Bombe entschärfen'; need = DEFUSE_T; act = () => { this.net.send({ t: 'defuse' }); this.planted = false; };
+      prompt = `${keyName(this.bind.interact)} halten: Bombe entschärfen`; need = DEFUSE_T; act = () => { this.net.send({ t: 'defuse' }); this.planted = false; };
     }
     hud.setPrompt(prompt);
     if (!act) { reset(); return; }
-    if (this.keys.has('KeyF')) { p.interact += dt / need; hud.setProgress(Math.min(1, p.interact)); if (p.interact >= 1) { reset(); act(); } } else reset();
+    if (this.keys.has(this.bind.interact)) { p.interact += dt / need; hud.setProgress(Math.min(1, p.interact)); if (p.interact >= 1) { reset(); act(); } } else reset();
   };
   P.bombTick = function (dt) {
+    if (this.flagMode) return this.flagTick(dt);
     const now = performance.now(), remain = Math.max(0, (this.phaseEnd - now) / 1000), mm = Math.floor(remain / 60), ss = String(Math.floor(remain % 60)).padStart(2, '0');
     if (this.planted && this.bombModel) {
       this.beepT -= dt; const f = 1 - Math.min(1, remain / 40);

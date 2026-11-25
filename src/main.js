@@ -38,7 +38,7 @@ const lobby = new Lobby({ renderer, profile, audio, root: $('lobby'), onPlay: pl
 
 async function play(mode) {
   if (busy) return; busy = true;
-  if (mode === 'online' || mode === 'bomb') return playOnline(mode);
+  if (mode === 'online' || mode === 'bomb' || mode === 'flag') return playOnline(mode);
   const res = await runMatchmaking({ root: $('mm'), profile, mode, audio });
   if (res.cancelled) { busy = false; return; }
   $('loading').style.display = 'flex';
@@ -71,7 +71,7 @@ function serverUrl() {
 function playOnline(mode = 'online') {
   const mm = $('mm'); mm.style.display = 'flex';
   const url = serverUrl();
-  const show = (title, sub, cancelLabel = 'ABBRECHEN') => { mm.innerHTML = `<div class="mm-box"><div class="mm-mode">${mode === 'bomb' ? 'BOMBE 6 GEGEN 6' : 'ONLINE'}</div><div class="mm-title" id="on-t">${title}</div><div class="mm-spinner"></div><div class="mm-skill" id="on-s">${sub}</div><button class="btn ghost" id="on-c">${cancelLabel}</button></div>`; mm.querySelector('#on-c').onclick = cancel; };
+  const show = (title, sub, cancelLabel = 'ABBRECHEN') => { mm.innerHTML = `<div class="mm-box"><div class="mm-mode">${mode === 'bomb' ? 'BOMBE 6 GEGEN 6' : mode === 'flag' ? 'FLAGGEN 6 GEGEN 6' : 'ONLINE'}</div><div class="mm-title" id="on-t">${title}</div><div class="mm-spinner"></div><div class="mm-skill" id="on-s">${sub}</div><button class="btn ghost" id="on-c">${cancelLabel}</button></div>`; mm.querySelector('#on-c').onclick = cancel; };
   let net = null, started = false, startMsg = null;
   const end = () => { mm.style.display = 'none'; mm.innerHTML = ''; busy = false; };
   function cancel() { if (net) net.close(); end(); }
@@ -79,7 +79,7 @@ function playOnline(mode = 'online') {
   net = new Net(url);
   net.on('error', () => { if (!started) { net.close(); show('SERVER NICHT ERREICHBAR', `${url}<br><small>Server starten mit: <b>npm run online</b> (oder Adresse unter Einstellungen → Server-Adresse ändern)</small>`, 'ZURÜCK'); mm.querySelector('.mm-spinner').style.display = 'none'; } });
   net.on('close', () => { if (!started && mm.style.display !== 'none' && !startMsg) { show('VERBINDUNG GETRENNT', url, 'ZURÜCK'); mm.querySelector('.mm-spinner').style.display = 'none'; } });
-  net.on('open', () => { const d = profile.data; net.send({ t: 'queue', mode, name: d.name, rank: profile.rank.idx, skin: d.skin }); show('SUCHE SPIELER…', 'Warte auf Mitspieler…'); });
+  net.on('open', () => { const d = profile.data; net.send({ t: 'queue', mode, name: d.name, rank: profile.rank.idx, skin: d.skin, cskin: d.charSkin }); show('SUCHE SPIELER…', 'Warte auf Mitspieler…'); });
   net.on('queue', (m) => { const e = mm.querySelector('#on-s'); if (e) e.innerHTML = `Spieler in der Warteschlange: <b>${m.n}</b> / ${m.max}<br>${m.eta !== null ? `Start in <b>${m.eta}</b> s` : `Mindestens ${m.min} Spieler nötig`}`; });
   net.on('start', async (m) => {
     startMsg = m; audio.match(); show('MATCH GEFUNDEN!', `${m.count} Spieler · Karte wird geladen…`); mm.querySelector('#on-c').style.display = 'none';
@@ -96,7 +96,7 @@ function playOnline(mode = 'online') {
   net.on('go', () => {
     started = true; end(); $('loading').style.display = 'none'; const sp = $('loading').querySelector('span'); if (sp) sp.textContent = 'Gelände, Städte und Kisten werden erzeugt';
     busy = true;
-    match = new Match({ renderer, scene: gameScene, world, profile, audio, opts: { mode: startMsg.mode === 'bomb' ? 'bomb' : 'online', players: [], online: { net, mode: startMsg.mode, team: startMsg.team, seed: startMsg.seed, you: startMsg.you, index: startMsg.index, count: startMsg.count, players: startMsg.players } }, hudRoot: $('hud'), onExit: () => { match = null; busy = false; lobby.start(); } });
+    match = new Match({ renderer, scene: gameScene, world, profile, audio, opts: { mode: startMsg.mode === 'bomb' ? 'bomb' : startMsg.mode === 'flag' ? 'flag' : 'online', players: [], online: { net, mode: startMsg.mode, team: startMsg.team, seed: startMsg.seed, you: startMsg.you, index: startMsg.index, count: startMsg.count, players: startMsg.players } }, hudRoot: $('hud'), onExit: () => { match = null; busy = false; lobby.start(); } });
     window.__br.match = match;
   });
 }
