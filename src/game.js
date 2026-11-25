@@ -6,6 +6,7 @@ import { HUD } from './hud.js';
 import { badgeSVG } from './badges.js';
 import { installBots } from './bots.js';
 import { installVehicles } from './vehicles.js';
+import { installOnline } from './online.js';
 
 const V3 = THREE.Vector3;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -37,6 +38,7 @@ export class Match {
     this.initEffects();
     this.initState();
     this.initBots();
+    this.initOnline();
     this.bindInput();
     this.setupZoneMesh();
     this.hud.setStats(this.alive, 0, 0);
@@ -51,10 +53,11 @@ export class Match {
     this.time = 0; this.over = false; this.paused = false; this.locked = false;
     this.zoneIdx = 0; this.zoneState = 'wait'; this.zoneT = 0;
     this.zone = { cx: 0, cz: 0, r: 1000, tcx: 0, tcz: 0, tr: ZONE_PHASES[0].r };
+    this.zoneRnd = this.opts.online ? mulberry32(this.opts.online.seed ^ 0x9e3779b9) : null;
     this.planNextZone();
     const ang = this.rnd() * 6.28;
     const p = this.player = {
-      pos: new V3(Math.cos(ang) * 650, 300, Math.sin(ang) * 650), vel: new V3(), yaw: ang + Math.PI * 0.5 + Math.PI, pitch: -0.5, recoilP: 0, recoilY: 0,
+      pos: this.opts.online ? new V3(this.spawnPos(this.opts.online.index, this.opts.online.count)[0], 300, this.spawnPos(this.opts.online.index, this.opts.online.count)[1]) : new V3(Math.cos(ang) * 650, 300, Math.sin(ang) * 650), vel: new V3(), yaw: ang + Math.PI * 0.5 + Math.PI, pitch: -0.5, recoilP: 0, recoilY: 0,
       hp: 100, armor: 0, state: 'fall', chute: false, crouch: 0, sprint: false, onGround: false, kills: 0, cash: 0, medkits: 0,
       slots: [{ def: WEAPON_BY_ID.sidekick, mag: 12 }, null, null], cur: 0,
       ammo: { light: 48, medium: 0, heavy: 0, shells: 0, rocket: 0 },
@@ -68,7 +71,7 @@ export class Match {
   weapon() { return this.player.slots[this.player.cur]; }
   planNextZone() {
     const ph = ZONE_PHASES[Math.min(this.zoneIdx, ZONE_PHASES.length - 1)], z = this.zone;
-    const maxOff = Math.max(0, z.r - ph.r) * 0.8, a = this.rnd() * 6.28, d = Math.sqrt(this.rnd()) * maxOff;
+    const zr = this.zoneRnd || this.rnd, maxOff = Math.max(0, z.r - ph.r) * 0.8, a = zr() * 6.28, d = Math.sqrt(zr()) * maxOff;
     z.tcx = z.cx + Math.cos(a) * d; z.tcz = z.cz + Math.sin(a) * d; z.tr = ph.r;
     z.fromX = z.cx; z.fromZ = z.cz; z.fromR = z.r;
   }
@@ -139,6 +142,7 @@ export class Match {
       const d = Math.hypot(b.x - pos.x, b.y + 0.9 - pos.y, b.z - pos.z);
       if (d < R) this.damageBot(b, def.dmg * (1 - d / R), owner, false, def.name);
     }
+    if (this.remotes && owner === 'player') for (const r of this.remotes.values()) { if (!r.alive) continue; const d = Math.hypot(r.x - pos.x, r.y + 0.9 - pos.y, r.z - pos.z); if (d < R) this.netHit(r, def.dmg * (1 - d / R), false, def.name); }
     for (const v of this.world.vehicles) { if (v.wreck) continue; const d = Math.hypot(v.x - pos.x, v.y + 1 - pos.y, v.z - pos.z); if (d < R + 2) this.damageVehicle(v, def.dmg * 1.5 * (1 - d / (R + 2)), owner); }
     if (this.player.alive && dp < R) this.damagePlayer(def.dmg * 0.6 * (1 - dp / R), pos, owner === 'player' ? 'Eigenbeschuss' : owner && owner.name ? owner.name : 'Explosion', def.name);
   }
@@ -277,8 +281,11 @@ export class Match {
     }
     const end = new V3(origin.x + dir.x * hit.t, origin.y + dir.y * hit.t, origin.z + dir.z * hit.t);
     if (hit.veh) { this.damageVehicle(hit.veh, def.dmg * 0.8, 'player'); this.hud.hitmarker(false, false); this.spark(end.x, end.y, end.z, 5, 1, 0.8, 0.3, 3, 0.3); }
-    if (hit.t > 3) this.tracer(muzzle, end);
-    if (hit.bot) {
+    if (hit.t > 3) { this.tracer(muzzle, end); this.netShot(muzzle, end, def); }
+    if (hit.remote) {
+      const dmg = def.dmg * this.falloff(hit.t, def.range) * (hit.head ? 1.9 : 1);
+      this.netHit(hit.remote, dmg, hit.head, def.name); this.hud.hitmarker(hit.head, false); this.audio.hit(hit.head); this.spark(end.x, end.y, end.z, 6, 0.9, 0.1, 0.1, 3, 0.4);
+    } else if (hit.bot) {
       const dmg = def.dmg * this.falloff(hit.t, def.range) * (hit.head ? 1.9 : 1) * (hit.t > def.range * 1.0 ? 0.6 : 1);
       const was = hit.bot.hp; this.damageBot(hit.bot, dmg, 'player', hit.head, def.name);
       this.hud.hitmarker(hit.head, hit.bot.hp <= 0 && was > 0); this.audio.hit(hit.head);
@@ -297,7 +304,16 @@ export class Match {
       const y = oy + dy * t; if (y < b.y || y > b.y + 1.78) continue;
       best = t; bot = b; head = y > b.y + 1.5;
     }
-    return { t: best, bot, head, kind: bot ? -2 : tw < 0 ? -1 : kind };
+    let remote = null;
+    if (this.remotes) for (const b of this.remotes.values()) {
+      if (!b.alive) continue;
+      const px = ox - b.x, pz = oz - b.z, a = dx * dx + dz * dz; if (a < 1e-8) continue;
+      const bb = px * dx + pz * dz, c = px * px + pz * pz - 0.16, disc = bb * bb - a * c; if (disc < 0) continue;
+      const sq = Math.sqrt(disc); let t = (-bb - sq) / a; if (t < 0) t = (-bb + sq) / a; if (t < 0 || t >= best) continue;
+      const y = oy + dy * t; if (y < b.y || y > b.y + 1.78) continue;
+      best = t; remote = b; bot = null; head = y > b.y + 1.5;
+    }
+    return { t: best, bot, remote, head, kind: bot || remote ? -2 : tw < 0 ? -1 : kind };
   }
   launchRocket(origin, dir, def) {
     const m = new THREE.Mesh(this.rocketGeo, this.rocketMat); m.position.copy(origin).addScaledVector(dir, 1.2); m.lookAt(m.position.clone().add(dir)); this.scene.add(m);
@@ -316,8 +332,8 @@ export class Match {
   }
 
   // ---------- Kisten & Beute ----------
-  rollLoot(tier, bot) {
-    const items = [], r = Math.random;
+  rollLoot(tier, bot, rnd = Math.random) {
+    const items = [], r = rnd;
     let def;
     if (tier === 3 && bot) def = bot.w;
     else {
@@ -360,7 +376,7 @@ export class Match {
       p.interact += dt / 0.7; this.hud.setProgress(p.interact);
       if (p.interact >= 1) {
         p.interact = 0; this.world.openCrate(crate); this.audio.crate();
-        this.applyLoot(crate.loot || (crate.loot = this.rollLoot(crate.tier)));
+        this.applyLoot(crate.loot || (crate.loot = this.crateLoot(crate))); this.netCrate(crate);
         this.hud.setProgress(0);
       }
     } else { p.interact = 0; this.hud.setProgress(0); }
@@ -383,7 +399,7 @@ export class Match {
     const p = this.player; if (!p.alive) return;
     if (p.vehicle) { p.vehicle.occupied = false; p.vehicle = null; this.audio.engineStop?.(); this.hud.setSpeedo(null); }
     p.alive = false; p.hp = 0; p.state = 'dead'; this.over = true;
-    this.placement = this.alive; this.alive--; this.hud.setHealth(0, 0, 0);
+    this.placement = this.alive; this.alive--; this.netDead(weapon); this.hud.setHealth(0, 0, 0);
     this.hud.banner(quit ? 'MATCH VERLASSEN' : 'ELIMINIERT', quit ? '' : `von ${killer}${weapon ? ' · ' + weapon : ''}`, 2400);
     setTimeout(() => this.showResults(), quit ? 200 : 2400);
   }
@@ -414,7 +430,7 @@ export class Match {
     this.running = false; this.unbindInput(); this.scene.remove(this.zoneMesh);
     for (const t of this.tracers) this.scene.remove(t.m);
     this.scene.remove(this.points); for (const b of this.booms) this.scene.remove(b.m); for (const pr of this.projectiles) this.scene.remove(pr.m);
-    this.disposeBots(); this.hud.root.innerHTML = ''; this.onExit();
+    this.disposeBots(); this.disposeOnline(); this.hud.root.innerHTML = ''; this.onExit();
   }
 
   // ---------- Zone ----------
@@ -542,7 +558,8 @@ export class Match {
     if (!this.over) {
       this.updatePlayer(dt); this.updateInteract(dt); this.updateZone(dt);
     } else if (this.player.state === 'dead') { this.camera.rotation.z = lerp(this.camera.rotation.z, 0.5, dt * 2); }
-    this.updateBots(dt); this.updateVehicles(dt); this.updateProjectiles(dt); this.updateEffects(dt);
+    if (this.net && !this.over) this.netTick(dt);
+    this.updateRemotes(dt); this.updateBots(dt); this.updateVehicles(dt); this.updateProjectiles(dt); this.updateEffects(dt);
     this.world.update(dt, this.camera.position);
     this.updateHud();
   }
@@ -551,7 +568,7 @@ export class Match {
     this.hud.setStats(this.alive, p.kills, Math.floor(p.cash)); this.hud.setHealth(p.hp, p.armor, p.medkits);
     this.hud.setCompass(p.yaw); this.refreshAmmo();
     const t = this.world.townAt(p.pos.x, p.pos.z, 1.3); this.hud.setLoc(t ? t.name.toUpperCase() : 'OFFENES GELÄNDE');
-    const pings = this.bots.filter((b) => b.alive && b.landed && b.ping > 0 && Math.hypot(b.x - p.pos.x, b.z - p.pos.z) < 220);
+    const pings = this.bots.filter((b) => b.alive && b.landed && b.ping > 0 && Math.hypot(b.x - p.pos.x, b.z - p.pos.z) < 220).concat(this.remotes ? [...this.remotes.values()].filter((r) => r.alive && r.ping > 0) : []);
     const s = { x: p.pos.x, z: p.pos.z, yaw: p.yaw, zone: this.zone, world: this.world, pings };
     if (!this._mmT || performance.now() - this._mmT > 50) { this._mmT = performance.now(); this.hud.drawMinimap(s); if (this.hud.bigMapOpen()) this.hud.drawBigMap(s); }
   }
@@ -564,3 +581,4 @@ export class Match {
 Match.ZP = ZONE_PHASES;
 installBots(Match);
 installVehicles(Match);
+installOnline(Match);

@@ -41,7 +41,7 @@ npm run build      # Produktions-Build nach dist/
 
 ## Hinweise
 
-- Das Spiel ist ein **Einzelspieler-Spiel gegen Bots**. Die 100er-Lobby und das Matchmaking sind simuliert, es gibt keinen Online-Server. Echtes Multiplayer bräuchte ein eigenes Backend.
+- Die Modi **Battle Royale** und **Ranked** sind Einzelspieler gegen Bots (100er-Lobby und Matchmaking simuliert). Der Modus **ONLINE** spielt mit echten Spielern, siehe unten.
 - Fortschritt (Münzen, Rang, Skins, Battle Pass) liegt im `localStorage` des Browsers.
 - Entwickler-Parameter in der URL: `?fast` (kurzes Matchmaking), `?nolock` (ohne Maus-Fangen), `?speed=4` (Spielzeit schneller).
 - Aktuell nur für Desktop mit Maus und Tastatur, nicht für Touch.
@@ -49,3 +49,18 @@ npm run build      # Produktions-Build nach dist/
 ## Fahrzeuge
 
 Taxis, Limousinen, SUVs, Transporter und Busse stehen auf den Straßen. Mit **E** einsteigen, **W/S** Gas/Bremse, **A/D** lenken, **Leertaste** Handbremse. Fahrzeuge können Gegner überfahren, bei Unfällen oder Beschuss Schaden nehmen und explodieren.
+
+## Online-Modus (echte Spieler)
+
+1. Server starten (baut das Spiel und liefert es mit aus):
+
+```bash
+npm run online
+```
+
+2. Alle Spieler öffnen `http://<Server-IP>:8080` (am besten im selben Browser-Typ, damit die zufällige Karte identisch erzeugt wird), wählen **ONLINE** und **SPIEL STARTEN**.
+3. Der Server sammelt Spieler in einer Warteschlange (Standard: ab 2 Spielern startet das Match nach 20 s, bei 16 sofort), schickt allen denselben Karten-Seed und startet, sobald alle geladen haben.
+
+Einstellbar per Umgebungsvariablen: `PORT`, `MIN_PLAYERS`, `MAX_PLAYERS`, `WAIT_SEC`, z. B. `MIN_PLAYERS=1 npm run online` zum Testen allein. Läuft das Spiel über den Vite-Entwicklungsserver (Port 5173), startet man den Server separat mit `npm run server`. Eine abweichende Server-Adresse trägt man unter Einstellungen ein.
+
+Im Online-Modus gibt es keine Bots und keine Fahrzeuge. Zone, Kisten und Karte sind für alle gleich, Spieler sehen und treffen sich gegenseitig, Kisten werden geteilt, Gefallene lassen eine Beutekiste zurück. Treffer werden vom Schützen berechnet (kein Anti-Cheat), das passt für Freunde und LAN, nicht für ein öffentliches Spiel.

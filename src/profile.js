@@ -16,7 +16,7 @@ function fresh() {
     bpClaimed: { free: [], prem: [] },
     seasonEnd: Date.now() + 41 * 86400000,
     stats: { matches: 0, wins: 0, kills: 0, top10: 0, best: 100 },
-    settings: { quality: 'high', sens: 1.0, volume: 0.7, fov: 80 },
+    settings: { quality: 'high', sens: 1.0, volume: 0.7, fov: 80, server: '' },
   };
 }
 

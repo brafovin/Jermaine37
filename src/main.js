@@ -6,6 +6,7 @@ import { runMatchmaking } from './matchmaking.js';
 import { Match } from './game.js';
 import { World } from './world.js';
 import { WEAPON_BY_ID } from './data.js';
+import { Net } from './net.js';
 
 const dpr = window.devicePixelRatio || 1;
 export const QUALITY = {
@@ -34,6 +35,7 @@ const lobby = new Lobby({ renderer, profile, audio, root: $('lobby'), onPlay: pl
 
 async function play(mode) {
   if (busy) return; busy = true;
+  if (mode === 'online') return playOnline();
   const res = await runMatchmaking({ root: $('mm'), profile, mode, audio });
   if (res.cancelled) { busy = false; return; }
   $('loading').style.display = 'flex';
@@ -55,3 +57,39 @@ async function play(mode) {
 
 window.__br = { profile, play, lobby, W: WEAPON_BY_ID, get world() { return world; } };
 lobby.start();
+
+function serverUrl() {
+  const s = profile.data.settings.server; if (s) return /^wss?:/.test(s) ? s : 'ws://' + s;
+  return location.port === '8080' ? `ws://${location.host}` : `ws://${location.hostname || 'localhost'}:8080`;
+}
+function playOnline() {
+  const mm = $('mm'); mm.style.display = 'flex';
+  const url = serverUrl();
+  const show = (title, sub, cancelLabel = 'ABBRECHEN') => { mm.innerHTML = `<div class="mm-box"><div class="mm-mode">ONLINE</div><div class="mm-title" id="on-t">${title}</div><div class="mm-spinner"></div><div class="mm-skill" id="on-s">${sub}</div><button class="btn ghost" id="on-c">${cancelLabel}</button></div>`; mm.querySelector('#on-c').onclick = cancel; };
+  let net = null, started = false, startMsg = null;
+  const end = () => { mm.style.display = 'none'; mm.innerHTML = ''; busy = false; };
+  function cancel() { if (net) net.close(); end(); }
+  show('VERBINDE…', url);
+  net = new Net(url);
+  net.on('error', () => { if (!started) { net.close(); show('SERVER NICHT ERREICHBAR', `${url}<br><small>Server starten mit: <b>npm run online</b> (oder Adresse unter Einstellungen → Server-Adresse ändern)</small>`, 'ZURÜCK'); mm.querySelector('.mm-spinner').style.display = 'none'; } });
+  net.on('close', () => { if (!started && mm.style.display !== 'none' && !startMsg) { show('VERBINDUNG GETRENNT', url, 'ZURÜCK'); mm.querySelector('.mm-spinner').style.display = 'none'; } });
+  net.on('open', () => { const d = profile.data; net.send({ t: 'queue', name: d.name, rank: profile.rank.idx, skin: d.skin }); show('SUCHE SPIELER…', 'Warte auf Mitspieler…'); });
+  net.on('queue', (m) => { const e = mm.querySelector('#on-s'); if (e) e.innerHTML = `Spieler in der Warteschlange: <b>${m.n}</b> / ${m.max}<br>${m.eta !== null ? `Start in <b>${m.eta}</b> s` : `Mindestens ${m.min} Spieler nötig`}`; });
+  net.on('start', async (m) => {
+    startMsg = m; audio.match(); show('MATCH GEFUNDEN!', `${m.count} Spieler · Karte wird geladen…`); mm.querySelector('#on-c').style.display = 'none';
+    await new Promise((r) => setTimeout(r, 400));
+    $('loading').style.display = 'flex'; lobby.stop(); await new Promise((r) => setTimeout(r, 60));
+    try {
+      if (world) { world.dispose(); world = null; }
+      gameScene = new THREE.Scene(); world = new World(renderer, gameScene, qual(), m.seed);
+      for (const v of world.vehicles) gameScene.remove(v.mesh); world.vehicles.length = 0;
+      net.send({ t: 'ready' }); const e = $('loading').querySelector('span'); if (e) e.textContent = 'Warte auf andere Spieler…';
+    } catch (err) { console.error(err); net.close(); $('loading').style.display = 'none'; lobby.start(); end(); }
+  });
+  net.on('go', () => {
+    started = true; end(); $('loading').style.display = 'none'; const sp = $('loading').querySelector('span'); if (sp) sp.textContent = 'Gelände, Städte und Kisten werden erzeugt';
+    busy = true;
+    match = new Match({ renderer, scene: gameScene, world, profile, audio, opts: { mode: 'online', players: [], online: { net, seed: startMsg.seed, you: startMsg.you, index: startMsg.index, count: startMsg.count, players: startMsg.players } }, hudRoot: $('hud'), onExit: () => { match = null; busy = false; lobby.start(); } });
+    window.__br.match = match;
+  });
+}

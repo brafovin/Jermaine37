@@ -73,6 +73,7 @@ export class Lobby {
     <div class="lb-br">
       <div class="modes">
         <button class="mode on" data-m="br"><b>BATTLE ROYALE</b><small>100 Spieler · Verdansk Island</small></button>
+        <button class="mode" data-m="online"><b>ONLINE</b><small>Echte Spieler</small></button>
         <button class="mode" data-m="ranked"><b>RANKED</b><small id="lb-rk-sub"></small><div class="mode-badge" id="lb-mbadge"></div></button>
       </div>
       <button class="play" id="lb-play"><span>▶ SPIEL STARTEN</span><small>MATCH FINDEN</small></button>
@@ -174,10 +175,11 @@ export class Lobby {
       <small>Auflösung wirkt sofort. Schatten, Bäume & Gelände-Details nach Neuladen der Seite.</small>
       <label>Maus-Empfindlichkeit <input type="range" id="s-sens" min="0.2" max="3" step="0.1" value="${s.sens}"><b id="s-sens-v">${s.sens}</b></label>
       <label>Sichtfeld (FOV) <input type="range" id="s-fov" min="60" max="110" step="1" value="${s.fov}"><b id="s-fov-v">${s.fov}</b></label>
+      <label>Server-Adresse (Online) <input id="s-server" type="text" placeholder="ws://localhost:8080" value="${s.server || ''}"></label>
       <label>Lautstärke <input type="range" id="s-vol" min="0" max="1" step="0.05" value="${s.volume}"><b id="s-vol-v">${s.volume}</b></label>
       <h3>Steuerung</h3><div class="keys"><span><kbd>WASD</kbd> Bewegen</span><span><kbd>Shift</kbd> Sprinten</span><span><kbd>Leertaste</kbd> Springen / Fallschirm</span><span><kbd>Strg/C</kbd> Ducken</span><span><kbd>Maus L</kbd> Schießen</span><span><kbd>Maus R</kbd> Zielen</span><span><kbd>R</kbd> Nachladen</span><span><kbd>1-3 / Rad</kbd> Waffe wechseln</span><span><kbd>F halten</kbd> Kiste öffnen</span><span><kbd>H</kbd> Medkit</span><span><kbd>M</kbd> Karte</span><span><kbd>Esc</kbd> Pause</span></div></div>`;
-    const bind = (id, key, cb) => { const el = b.querySelector('#' + id); el.oninput = () => { s[key] = key === 'quality' ? el.value : +el.value; const v = b.querySelector('#' + id + '-v'); if (v) v.textContent = el.value; this.profile.save(); cb && cb(); }; };
-    bind('s-q', 'quality', () => this.onQuality()); bind('s-sens', 'sens'); bind('s-fov', 'fov'); bind('s-vol', 'volume', () => this.audio.setVolume(s.volume));
+    const bind = (id, key, cb) => { const el = b.querySelector('#' + id); el.oninput = () => { s[key] = key === 'quality' || key === 'server' ? el.value.trim() : +el.value; const v = b.querySelector('#' + id + '-v'); if (v) v.textContent = el.value; this.profile.save(); cb && cb(); }; };
+    bind('s-q', 'quality', () => this.onQuality()); bind('s-server', 'server'); bind('s-sens', 'sens'); bind('s-fov', 'fov'); bind('s-vol', 'volume', () => this.audio.setVolume(s.volume));
   }
   pAccount(b) {
     const d = this.profile.data, rk = this.profile.rank, lv = this.profile.level;
