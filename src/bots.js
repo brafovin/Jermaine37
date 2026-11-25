@@ -5,7 +5,7 @@ import { HALF } from './world.js';
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const angDiff = (a, b) => { let d = b - a; while (d > Math.PI) d -= 6.2832; while (d < -Math.PI) d += 6.2832; return d; };
 
-import { HUMAN_PARTS, randomOutfit, roleColor, poseHuman } from './human.js';
+import { HUMAN_PARTS, randomOutfit, roleColor, poseHuman, roleTex, roleRough } from './human.js';
 
 export function installBots(Match) {
   const P = Match.prototype;
@@ -36,7 +36,7 @@ export function installBots(Match) {
     const n = this.bots.length; this.botMeshes = {}; this.botGeos = []; this.botMats = [];
     const col = new THREE.Color();
     for (const pt of HUMAN_PARTS) {
-      const geo = pt.geo(), mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: pt.role === 'skin' ? 0.55 : 0.85 });
+      const geo = pt.geo(), mat = new THREE.MeshStandardMaterial({ color: 0xffffff, map: roleTex(pt.role), roughness: roleRough(pt.role), metalness: pt.role === 'vest' || pt.role === 'helmet' ? 0.15 : 0 });
       const im = new THREE.InstancedMesh(geo, mat, n); im.frustumCulled = false; im.castShadow = true; im.receiveShadow = true;
       this.scene.add(im); this.botMeshes[pt.k] = im; this.botGeos.push(geo); this.botMats.push(mat);
       this.bots.forEach((b, i) => im.setColorAt(i, col.setHex(roleColor(b.outfit, pt.role))));

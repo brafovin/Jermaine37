@@ -121,7 +121,7 @@ export function flashTexture() {
 // Soldat für die Lobby: menschliche Figur mit Waffe in der Hand
 import { makeHumanGroup, randomOutfit } from './human.js';
 export function makeSoldier(skin, def) {
-  const outfit = { skin: 0xd9a47e, hair: 0x3a2416, jacket: 0x4a5236, pants: 0x2a2f38, vest: 0x1b1d20, shoe: 0x1c1a18, cap: null, pony: false, glove: 0x1a1a1a, dark: 0x0a0806 };
+  const outfit = { skin: 0xd9a47e, hair: 0x3a2416, jacket: 0x4a5236, collar: 0x3a412a, pants: 0x2a2f38, vest: 0x1b1d20, shoe: 0x1c1a18, belt: 0x2a2218, cap: null, helmet: null, pack: null, pony: false, glove: 0x1a1a1a, dark: 0x0a0806, white: 0xf2efe8, iris: 0x2a4a6a, lips: 0xb06a58 };
   const h = makeHumanGroup(outfit, true);
   h.userData.pose({ walk: 0, moving: false, aim: 0.85, t: 0 });
   const w = makeWeaponModel(def, skin, false); w.scale.setScalar(1.0); w.position.set(0.13, 1.3, -0.36); w.rotation.x = 0.04; h.add(w);
