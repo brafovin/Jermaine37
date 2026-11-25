@@ -5,25 +5,7 @@ import { HALF } from './world.js';
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const angDiff = (a, b) => { let d = b - a; while (d > Math.PI) d -= 6.2832; while (d < -Math.PI) d += 6.2832; return d; };
 
-const SKINS_T = [0xe0b08c, 0xc99b7a, 0x9a6b4a, 0x6b4630];
-const HAIR_T = [0x2a1a10, 0x4a2f1a, 0x7a5530, 0x111111, 0xb08040, 0x5a2a18];
-const BLUE_T = [0x1d5fb0, 0x1a529a, 0x2468b8, 0x1b5aa6];
-const PARTS = [
-  { k: 'torso', g: [0.46, 0.56, 0.26], c: 0xffffff, tint: (b) => b.blue },
-  { k: 'stripe', g: [0.1, 0.5, 0.02], c: 0xe6c25a },
-  { k: 'belt', g: [0.48, 0.08, 0.28], c: 0xe6c25a },
-  { k: 'head', g: [0.22, 0.24, 0.24], c: 0xffffff, tint: (b) => b.skinC },
-  { k: 'hair', g: [0.25, 0.1, 0.27], c: 0xffffff, tint: (b) => b.hairC },
-  { k: 'hairB', g: [0.24, 0.3, 0.1], c: 0xffffff, tint: (b) => b.hairC },
-  { k: 'legL', g: [0.19, 0.8, 0.22], c: 0x1a529a },
-  { k: 'legR', g: [0.19, 0.8, 0.22], c: 0x1a529a },
-  { k: 'bootL', g: [0.2, 0.14, 0.28], c: 0x6b4528 },
-  { k: 'bootR', g: [0.2, 0.14, 0.28], c: 0x6b4528 },
-  { k: 'armL', g: [0.14, 0.55, 0.14], c: 0x1d5fb0 },
-  { k: 'armR', g: [0.14, 0.55, 0.14], c: 0x1d5fb0 },
-  { k: 'pip', g: [0.12, 0.14, 0.16], c: 0x7d8a82 },
-  { k: 'gun', g: [0.07, 0.12, 0.7], c: 0x1b1d20 },
-];
+import { HUMAN_PARTS, randomOutfit, roleColor, poseHuman } from './human.js';
 
 export function installBots(Match) {
   const P = Match.prototype;
@@ -42,7 +24,7 @@ export function installBots(Match) {
         id: i, name: pl.name, rank: pl.rank, skill, x: pt[0], z: pt[1], y: this.world.heightAt(pt[0], pt[1]), yaw: this.rnd() * 6.28,
         hp: 100, armor: this.rnd() < 0.4 ? 25 : 0, w, mag: w.mag, alive: true, landed: false, landT: 3 + this.rnd() * 24, kills: 0,
         tx: pt[0], tz: pt[1], waitT: 0, enemy: null, scanT: this.rnd() * 0.4, react: 0, fireT: 0, burst: 4, strafe: 1, strafeT: 1, walk: this.rnd() * 6, accT: 0,
-        fall: 0, ping: 0, stuckT: 0, sx: pt[0], sz: pt[1], lootT: this.rnd(), reloadT: 0, moving: false, skinC: SKINS_T[(this.rnd() * 4) | 0], hairC: HAIR_T[(this.rnd() * HAIR_T.length) | 0], blue: BLUE_T[(this.rnd() * 4) | 0], first: true,
+        fall: 0, ping: 0, stuckT: 0, sx: pt[0], sz: pt[1], lootT: this.rnd(), reloadT: 0, moving: false, outfit: randomOutfit(this.rnd), first: true,
       });
     });
     this.player.isPlayer = true;
@@ -53,13 +35,13 @@ export function installBots(Match) {
   P.initBotMeshes = function () {
     const n = this.bots.length; this.botMeshes = {}; this.botGeos = []; this.botMats = [];
     const col = new THREE.Color();
-    for (const pt of PARTS) {
-      const geo = new THREE.BoxGeometry(...pt.g), mat = new THREE.MeshStandardMaterial({ color: pt.c, roughness: 0.85 });
+    for (const pt of HUMAN_PARTS) {
+      const geo = pt.geo(), mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: pt.role === 'skin' ? 0.55 : 0.85 });
       const im = new THREE.InstancedMesh(geo, mat, n); im.frustumCulled = false; im.castShadow = true; im.receiveShadow = true;
       this.scene.add(im); this.botMeshes[pt.k] = im; this.botGeos.push(geo); this.botMats.push(mat);
-      if (pt.tint) this.bots.forEach((b, i) => im.setColorAt(i, col.setHex(pt.tint(b))));
+      this.bots.forEach((b, i) => im.setColorAt(i, col.setHex(roleColor(b.outfit, pt.role))));
     }
-    this._m4 = new THREE.Matrix4(); this._l = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._p = new THREE.Vector3(); this._s = new THREE.Vector3(1, 1, 1); this._ax = new THREE.Vector3(1, 0, 0);
+    this._m4 = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._p = new THREE.Vector3(); this._s = new THREE.Vector3(1, 1, 1); this._ax = new THREE.Vector3(1, 0, 0);
     this._zero = new THREE.Matrix4().makeScale(0, 0, 0);
   };
   P.disposeBots = function () {
@@ -88,7 +70,7 @@ export function installBots(Match) {
 
   P.botFindEnemy = function (b) {
     const p = this.player, detect = 40 + b.skill * 60; let best = null, bd = 1e9;
-    if (p.alive && p.state === 'ground') {
+    if (p.alive && p.state !== 'fall' && p.state !== 'dead') {
       const d = Math.hypot(p.pos.x - b.x, p.pos.z - b.z), hear = p.shotT > 0 ? 1.4 : 1;
       if (d < detect * hear && d < b.w.range * 1.5 && this.botLoS(b, this.targetPos(p))) { best = p; bd = d; }
     }
@@ -256,27 +238,17 @@ export function installBots(Match) {
   };
 
   P.renderBots = function () {
-    const M = this.botMeshes, base = this._m4, local = this._l, q = this._q, pos = this._p, s = this._s, ax = this._ax, p = this.player;
-    const cp = this.camera.position;
-    const setPart = (k, i, px, py, pz, rx, cy) => {
-      pos.set(px, py + cy * Math.cos(rx), pz + cy * Math.sin(rx)); q.setFromAxisAngle(ax, rx); local.compose(pos, q, s);
-      M[k].setMatrixAt(i, local.premultiply(base));
-    };
+    const M = this.botMeshes, base = this._m4, q = this._q, pos = this._p, sc = this._s, ax = this._ax, cp = this.camera.position;
+    const yAx = this._yAx || (this._yAx = new THREE.Vector3(0, 1, 0)), qb = this._qb || (this._qb = new THREE.Quaternion()), qf = this._qf || (this._qf = new THREE.Quaternion());
+    let idx = 0; const emit = (k, mat) => M[k].setMatrixAt(idx, mat);
     this.bots.forEach((b, i) => {
+      idx = i;
       const dist = Math.hypot(b.x - cp.x, b.z - cp.z);
       if (!b.landed || (!b.alive && b.fall >= 1 && this.time - (b.deadAt || (b.deadAt = this.time)) > 4) || dist > 520) { for (const k in M) M[k].setMatrixAt(i, this._zero); return; }
-      pos.set(b.x, b.y, b.z); q.setFromAxisAngle(this._yAx || (this._yAx = new THREE.Vector3(0, 1, 0)), b.yaw);
-      const qb = new THREE.Quaternion().copy(q);
-      if (!b.alive) { qb.multiply(new THREE.Quaternion().setFromAxisAngle(ax, b.fall * 1.5)); }
-      base.compose(pos, qb, s);
-      const sw = b.moving ? Math.sin(b.walk) * 0.65 : 0, armF = b.enemy ? 1.35 : (b.moving ? 1.1 : 1.0);
-      setPart('torso', i, 0, 1.12, 0, 0, 0); setPart('stripe', i, 0, 1.12, -0.135, 0, 0); setPart('belt', i, 0, 0.83, 0, 0, 0);
-      setPart('head', i, 0, 1.55, 0, 0, 0); setPart('hair', i, 0, 1.69, 0, 0, 0); setPart('hairB', i, 0, 1.55, 0.13, 0.1, 0);
-      setPart('legL', i, -0.12, 0.82, 0, sw, -0.41); setPart('legR', i, 0.12, 0.82, 0, -sw, -0.41);
-      setPart('bootL', i, -0.12, 0.82, 0, sw, -0.74); setPart('bootR', i, 0.12, 0.82, 0, -sw, -0.74);
-      setPart('armL', i, -0.3, 1.38, 0, armF - 0.1, -0.27); setPart('armR', i, 0.3, 1.38, 0, armF, -0.27);
-      setPart('pip', i, -0.37, 1.38, 0, armF - 0.1, -0.42);
-      setPart('gun', i, 0.1, 1.12, -0.38, 0, 0);
+      pos.set(b.x, b.y, b.z); qb.setFromAxisAngle(yAx, b.yaw);
+      if (!b.alive) qb.multiply(qf.setFromAxisAngle(ax, b.fall * 1.5));
+      base.compose(pos, qb, sc);
+      poseHuman(base, emit, { walk: b.walk, moving: b.moving, aim: b.enemy ? 1 : b.moving ? 0.6 : 0.75, t: this.time + i }, b.outfit);
     });
     for (const k in M) M[k].instanceMatrix.needsUpdate = true;
   };

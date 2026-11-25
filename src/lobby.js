@@ -17,7 +17,7 @@ export class Lobby {
   buildScene() {
     const s = this.scene = new THREE.Scene();
     s.background = new THREE.Color(0x07141a); s.fog = new THREE.Fog(0x07141a, 8, 22);
-    this.cam = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.1, 60); this.cam.position.set(0, 1.45, 5.6); this.cam.lookAt(0, 1.1, 0);
+    this.cam = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.1, 60); this.cam.position.set(0, 1.35, 4.6); this.cam.lookAt(0, 1.0, 0);
     s.add(new THREE.HemisphereLight(0x6fb8c8, 0x111a1c, 0.7));
     const key = new THREE.SpotLight(0xfff0dc, 90, 20, 0.5, 0.6, 1.5); key.position.set(2.6, 4.2, 4); key.target.position.set(0, 1.1, 0); key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.bias = -0.0004;
     const rim = new THREE.PointLight(0x2fd0c0, 30, 14); rim.position.set(-3, 2.4, -2.5);
@@ -47,7 +47,7 @@ export class Lobby {
       if (!this.active) return; requestAnimationFrame(loop);
       const dt = Math.min(0.05, (t - this.last) / 1000); this.last = t;
       const time = t / 1000;
-      this.soldierHolder.rotation.y = this.rotY + Math.sin(time * 0.4) * 0.08; this.soldier.position.y = Math.sin(time * 1.6) * 0.008;
+      this.soldierHolder.rotation.y = this.rotY + Math.sin(time * 0.4) * 0.08; this.soldier.userData.update(time);
       this.renderer.autoClear = true; this.renderer.render(this.scene, this.cam);
     };
     requestAnimationFrame(loop);

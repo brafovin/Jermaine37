@@ -118,34 +118,14 @@ export function flashTexture() {
   return new THREE.CanvasTexture(c);
 }
 
-// Soldat für die Lobby (schaut nach +Z, hält die Waffe aufrecht) – blauer Vault-Anzug mit gelben Streifen
+// Soldat für die Lobby: menschliche Figur mit Waffe in der Hand
+import { makeHumanGroup, randomOutfit } from './human.js';
 export function makeSoldier(skin, def) {
-  const g = new THREE.Group();
-  const std = (c, r = 0.8, m = 0) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m });
-  const blue = std(0x1d5fb0, 0.7), blueD = std(0x174b8c, 0.75), yellow = std(0xe6c25a, 0.6), brown = std(0x6b4528, 0.85), skinM = std(0xc99b7a, 0.7), hair = std(0x3a2418, 0.6), dev = std(0x7d8a82, 0.5, 0.5), eye = std(0x1a1210, 0.4);
-  const screen = new THREE.MeshStandardMaterial({ color: 0x113322, emissive: 0x39ff6a, emissiveIntensity: 1.2 });
-  const add = (geo, mat, x, y, z, rx = 0, rz = 0) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); o.rotation.set(rx, 0, rz); o.castShadow = true; g.add(o); return o; };
-  add(boxGeo(0.2, 0.85, 0.24), blue, -0.12, 0.45, 0); add(boxGeo(0.2, 0.85, 0.24), blue, 0.12, 0.45, 0);
-  add(boxGeo(0.22, 0.2, 0.36), brown, -0.12, 0.08, 0.05); add(boxGeo(0.22, 0.2, 0.36), brown, 0.12, 0.08, 0.05);
-  add(boxGeo(0.54, 0.1, 0.32), yellow, 0, 0.98, 0); add(boxGeo(0.52, 0.22, 0.3), blue, 0, 1.12, 0);
-  add(boxGeo(0.5, 0.52, 0.3), blue, 0, 1.42, 0);
-  add(boxGeo(0.06, 0.5, 0.02), yellow, -0.1, 1.42, 0.16, 0, 0.1); add(boxGeo(0.06, 0.5, 0.02), yellow, 0.1, 1.42, 0.16, 0, -0.1);
-  add(boxGeo(0.16, 0.06, 0.2), yellow, 0, 1.7, 0.02); add(boxGeo(0.08, 0.1, 0.08), skinM, 0, 1.74, 0);
-  add(boxGeo(0.22, 0.26, 0.24), skinM, 0, 1.92, 0.01);
-  add(boxGeo(0.25, 0.09, 0.27), hair, 0, 2.08, 0); add(boxGeo(0.26, 0.28, 0.1), hair, 0, 1.94, -0.12); add(boxGeo(0.08, 0.34, 0.08), hair, 0, 1.76, -0.2, 0.15);
-  add(boxGeo(0.04, 0.03, 0.02), eye, -0.06, 1.95, 0.125); add(boxGeo(0.04, 0.03, 0.02), eye, 0.06, 1.95, 0.125); add(boxGeo(0.07, 0.015, 0.02), std(0x9a5a4a), 0, 1.86, 0.125);
-  // linker Arm hängt, mit Armgerät
-  add(boxGeo(0.15, 0.55, 0.16), blue, -0.35, 1.38, 0.02, 0, 0.1);
-  add(boxGeo(0.17, 0.08, 0.18), brown, -0.35, 1.52, 0.02, 0, 0.1);
-  add(boxGeo(0.14, 0.4, 0.15), blueD, -0.37, 0.98, 0.04); add(boxGeo(0.16, 0.1, 0.16), brown, -0.37, 0.9, 0.04);
-  add(boxGeo(0.12, 0.2, 0.2), dev, -0.4, 0.98, 0.12); add(boxGeo(0.1, 0.14, 0.02), screen, -0.4, 0.98, 0.225);
-  add(boxGeo(0.1, 0.1, 0.1), skinM, -0.37, 0.76, 0.04);
-  // rechter Arm hält Waffe
-  const w = makeWeaponModel(def, skin, false); w.scale.setScalar(1.1);
-  w.position.set(0.42, 1.2, 0.34); w.rotation.set(Math.PI / 2 + 0.05, 0, 0); g.add(w);
-  const ra = add(boxGeo(0.16, 0.34, 0.16), blue, 0.38, 1.4, 0.12); ra.rotation.x = -0.6;
-  add(boxGeo(0.17, 0.07, 0.18), brown, 0.38, 1.5, 0.1).rotation.x = -0.6;
-  const fa = add(boxGeo(0.15, 0.4, 0.15), blueD, 0.4, 1.22, 0.32); fa.rotation.x = -1.2;
-  add(boxGeo(0.12, 0.12, 0.12), skinM, 0.42, 1.2, 0.4);
-  return g;
+  const outfit = { skin: 0xd9a47e, hair: 0x3a2416, jacket: 0x4a5236, pants: 0x2a2f38, vest: 0x1b1d20, shoe: 0x1c1a18, cap: null, pony: false, glove: 0x1a1a1a, dark: 0x0a0806 };
+  const h = makeHumanGroup(outfit, true);
+  h.userData.pose({ walk: 0, moving: false, aim: 0.85, t: 0 });
+  const w = makeWeaponModel(def, skin, false); w.scale.setScalar(1.0); w.position.set(0.13, 1.3, -0.36); w.rotation.x = 0.04; h.add(w);
+  const root = new THREE.Group(); h.rotation.y = Math.PI; root.add(h);
+  root.userData.update = (t) => h.userData.pose({ walk: 0, moving: false, aim: 0.85, t });
+  return root;
 }

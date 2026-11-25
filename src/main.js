@@ -26,7 +26,7 @@ const qual = () => QUALITY[profile.data.settings.quality] || QUALITY.high;
 const applyRes = () => { renderer.setPixelRatio(qual().pr()); renderer.setSize(innerWidth, innerHeight); };
 applyRes(); addEventListener('resize', applyRes);
 
-const gameScene = new THREE.Scene();
+let gameScene = null;
 let world = null, match = null, busy = false;
 const $ = (id) => document.getElementById(id);
 
@@ -40,7 +40,9 @@ async function play(mode) {
   lobby.stop();
   await new Promise((r) => setTimeout(r, 60));
   try {
-    if (!world) world = new World(renderer, gameScene, qual()); else world.resetCrates();
+    if (world) { world.dispose(); world = null; }
+    gameScene = new THREE.Scene();
+    world = new World(renderer, gameScene, qual(), (Math.random() * 1e9) | 0);
     $('mm').style.display = 'none'; $('mm').innerHTML = '';
     match = new Match({
       renderer, scene: gameScene, world, profile, audio, opts: { mode, players: res.players }, hudRoot: $('hud'),

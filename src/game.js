@@ -5,6 +5,7 @@ import { makeWeaponModel, flashTexture } from './weaponmodel.js';
 import { HUD } from './hud.js';
 import { badgeSVG } from './badges.js';
 import { installBots } from './bots.js';
+import { installVehicles } from './vehicles.js';
 
 const V3 = THREE.Vector3;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -40,7 +41,7 @@ export class Match {
     this.setupZoneMesh();
     this.hud.setStats(this.alive, 0, 0);
     this.refreshWeaponUI();
-    this.hud.banner('SPRUNG!', 'Steuere mit WASD · Leertaste = Fallschirm', 4500);
+    this.hud.banner('SPRUNG!', `Karte: ${world.mapName} · WASD steuern · Leertaste = Fallschirm`, 4500);
     this.last = performance.now(); this.running = true;
     this.loop = this.loop.bind(this); requestAnimationFrame(this.loop);
   }
@@ -57,7 +58,7 @@ export class Match {
       hp: 100, armor: 0, state: 'fall', chute: false, crouch: 0, sprint: false, onGround: false, kills: 0, cash: 0, medkits: 0,
       slots: [{ def: WEAPON_BY_ID.sidekick, mag: 12 }, null, null], cur: 0,
       ammo: { light: 48, medium: 0, heavy: 0, shells: 0, rocket: 0 },
-      fireCD: 0, reload: 0, ads: 0, swap: 0, healT: 0, stepT: 0, bob: 0, interact: 0, alive: true, shotsFired: 0, dist: 0,
+      vehicle: null, camYaw: 0, camPitch: 0.2, fireCD: 0, reload: 0, ads: 0, swap: 0, healT: 0, stepT: 0, bob: 0, interact: 0, alive: true, shotsFired: 0, dist: 0,
     };
     p.yaw = Math.atan2(p.pos.x, p.pos.z); // forward = (-sin, -cos) -> Blick zur Inselmitte
     this.camera.position.copy(p.pos);
@@ -138,7 +139,8 @@ export class Match {
       const d = Math.hypot(b.x - pos.x, b.y + 0.9 - pos.y, b.z - pos.z);
       if (d < R) this.damageBot(b, def.dmg * (1 - d / R), owner, false, def.name);
     }
-    if (this.player.alive && dp < R) this.damagePlayer(def.dmg * 0.6 * (1 - dp / R), pos, owner === 'player' ? 'Eigenbeschuss' : owner.name, def.name);
+    for (const v of this.world.vehicles) { if (v.wreck) continue; const d = Math.hypot(v.x - pos.x, v.y + 1 - pos.y, v.z - pos.z); if (d < R + 2) this.damageVehicle(v, def.dmg * 1.5 * (1 - d / (R + 2)), owner); }
+    if (this.player.alive && dp < R) this.damagePlayer(def.dmg * 0.6 * (1 - dp / R), pos, owner === 'player' ? 'Eigenbeschuss' : owner && owner.name ? owner.name : 'Explosion', def.name);
   }
 
   // ---------- Eingabe ----------
@@ -152,6 +154,7 @@ export class Match {
         if (e.code === 'KeyR') this.startReload();
         if (e.code === 'Digit1') this.switchTo(0); if (e.code === 'Digit2') this.switchTo(1); if (e.code === 'Digit3') this.switchTo(2);
         if (e.code === 'KeyH') this.useMedkit();
+        if (e.code === 'KeyE') this.toggleVehicle();
         if (e.code === 'KeyM') this.hud.toggleBigMap(!this.hud.bigMapOpen());
         if (e.code === 'Space' && this.player.state === 'fall') { this.player.chute = !this.player.chute; if (this.player.chute) this.audio.heal(); }
         if (e.code === 'KeyQ') this.cycleWeapon(1);
@@ -268,14 +271,19 @@ export class Match {
   falloff(dist, range) { return 1 - 0.4 * clamp((dist - range * 0.35) / (range * 0.65), 0, 1); }
   bullet(origin, dir, def, muzzle) {
     const hit = this.traceBullet(origin.x, origin.y, origin.z, dir.x, dir.y, dir.z, def.range * 1.4);
+    if (!hit.bot) for (const v of this.world.vehicles) {
+      if (v.wreck) continue; const ox = origin.x - v.x, oy = origin.y - (v.y + 1), oz = origin.z - v.z, rr = v.rad * 0.55, b2 = ox * dir.x + oy * dir.y + oz * dir.z, c2 = ox * ox + oy * oy + oz * oz - rr * rr, dsc = b2 * b2 - c2;
+      if (dsc < 0) continue; const tt = -b2 - Math.sqrt(dsc); if (tt > 0 && tt < hit.t) { hit.t = tt; hit.veh = v; }
+    }
     const end = new V3(origin.x + dir.x * hit.t, origin.y + dir.y * hit.t, origin.z + dir.z * hit.t);
+    if (hit.veh) { this.damageVehicle(hit.veh, def.dmg * 0.8, 'player'); this.hud.hitmarker(false, false); this.spark(end.x, end.y, end.z, 5, 1, 0.8, 0.3, 3, 0.3); }
     if (hit.t > 3) this.tracer(muzzle, end);
     if (hit.bot) {
       const dmg = def.dmg * this.falloff(hit.t, def.range) * (hit.head ? 1.9 : 1) * (hit.t > def.range * 1.0 ? 0.6 : 1);
       const was = hit.bot.hp; this.damageBot(hit.bot, dmg, 'player', hit.head, def.name);
       this.hud.hitmarker(hit.head, hit.bot.hp <= 0 && was > 0); this.audio.hit(hit.head);
       this.spark(end.x, end.y, end.z, 6, 0.9, 0.1, 0.1, 3, 0.4);
-    } else if (hit.kind >= 0) this.spark(end.x, end.y, end.z, 5, 0.85, 0.8, 0.6, 3.5, 0.35);
+    } else if (hit.kind >= 0 && !hit.veh) this.spark(end.x, end.y, end.z, 5, 0.85, 0.8, 0.6, 3.5, 0.35);
   }
   // Treffer auf Bots, Gebäude oder Gelände
   traceBullet(ox, oy, oz, dx, dy, dz, maxT, ignore = null) {
@@ -346,7 +354,7 @@ export class Match {
   updateInteract(dt) {
     const p = this.player; let crate = null;
     if (p.state === 'ground') crate = this.world.nearestCrate(p.pos.x, p.pos.y, p.pos.z, 2.6);
-    if (!crate) { p.interact = 0; this.hud.setPrompt(''); this.hud.setProgress(0); return; }
+    if (!crate) { p.interact = 0; this.hud.setProgress(0); const nv = p.state === 'ground' ? this.nearestVehicle(p.pos.x, p.pos.z, 3.6) : null; this.hud.setPrompt(nv ? `E: ${nv.name} fahren` : ''); return; }
     this.hud.setPrompt(crate.tier === 3 ? 'F halten: Beutekiste plündern' : 'F halten: Kiste öffnen');
     if (this.keys.has('KeyF')) {
       p.interact += dt / 0.7; this.hud.setProgress(p.interact);
@@ -373,13 +381,14 @@ export class Match {
   }
   die(killer, weapon, quit) {
     const p = this.player; if (!p.alive) return;
+    if (p.vehicle) { p.vehicle.occupied = false; p.vehicle = null; this.audio.engineStop?.(); this.hud.setSpeedo(null); }
     p.alive = false; p.hp = 0; p.state = 'dead'; this.over = true;
     this.placement = this.alive; this.alive--; this.hud.setHealth(0, 0, 0);
     this.hud.banner(quit ? 'MATCH VERLASSEN' : 'ELIMINIERT', quit ? '' : `von ${killer}${weapon ? ' · ' + weapon : ''}`, 2400);
     setTimeout(() => this.showResults(), quit ? 200 : 2400);
   }
   win() {
-    if (this.over) return; this.over = true; this.placement = 1; this.player.state = 'dead';
+    if (this.over) return; this.over = true; this.placement = 1; if (this.player.vehicle) { this.player.vehicle.occupied = false; this.player.vehicle = null; this.audio.engineStop?.(); this.hud.setSpeedo(null); } this.player.state = 'dead';
     this.hud.banner('SIEG!', 'Du bist der letzte Überlebende', 3500); this.audio.match();
     setTimeout(() => this.showResults(), 3400);
   }
@@ -431,6 +440,7 @@ export class Match {
   // ---------- Spieler-Update ----------
   updatePlayer(dt) {
     const p = this.player, w = this.weapon(), cam = this.camera;
+    if (p.state === 'drive') { this.updateDriving(dt); return; }
     const sens = 0.0022 * this.profile.data.settings.sens * (p.ads > 0.5 && w ? 1 / Math.sqrt(w.def.zoom) : 1);
     p.yaw -= this.mouse.dx * sens; p.pitch = clamp(p.pitch - this.mouse.dy * sens, -1.5, 1.5); this.mouse.dx = this.mouse.dy = 0;
     p.recoilP = Math.max(0, p.recoilP - (0.05 + p.recoilP * 6) * dt); p.recoilY *= Math.max(0, 1 - 5 * dt);
@@ -460,7 +470,7 @@ export class Match {
       p.vel.y -= 17 * dt;
       const ox = p.pos.x, oz = p.pos.z;
       p.pos.x += p.vel.x * dt; p.pos.z += p.vel.z * dt; p.pos.y += p.vel.y * dt;
-      this.world.collide(p.pos, 0.38, p.pos.y, 1.8 - p.crouch * 0.6);
+      this.world.collide(p.pos, 0.38, p.pos.y, 1.8 - p.crouch * 0.6); this.collideVehicles(p.pos, 0.38);
       const r = Math.hypot(p.pos.x, p.pos.z); if (r > 985) { p.pos.x *= 985 / r; p.pos.z *= 985 / r; }
       const g = this.world.groundAt(p.pos.x, p.pos.z, p.pos.y);
       if (p.pos.y <= g) { if (!p.onGround && p.vel.y < -9) { this.damagePlayer(Math.max(0, (-p.vel.y - 9) * 6), null, 'Sturz', ''); } p.pos.y = g; p.vel.y = 0; p.onGround = true; } else if (p.pos.y > g + 0.08) p.onGround = false;
@@ -492,7 +502,7 @@ export class Match {
   }
   updateViewModel(dt, scoped) {
     const p = this.player, w = this.weapon(), g = this.viewGroup;
-    g.visible = !!w && p.state !== 'fall' && p.state !== 'dead' && !scoped && !this.hud.bigMapOpen();
+    g.visible = !!w && p.state === 'ground' && !scoped && !this.hud.bigMapOpen();
     if (!w || !this.curModel) return;
     this.kick = Math.max(0, this.kick - dt * 9); this.flashT = Math.max(0, this.flashT - dt);
     const sx = -this.mouse.dx * 0.0003, sy = this.mouse.dy * 0.0003;
@@ -532,7 +542,7 @@ export class Match {
     if (!this.over) {
       this.updatePlayer(dt); this.updateInteract(dt); this.updateZone(dt);
     } else if (this.player.state === 'dead') { this.camera.rotation.z = lerp(this.camera.rotation.z, 0.5, dt * 2); }
-    this.updateBots(dt); this.updateProjectiles(dt); this.updateEffects(dt);
+    this.updateBots(dt); this.updateVehicles(dt); this.updateProjectiles(dt); this.updateEffects(dt);
     this.world.update(dt, this.camera.position);
     this.updateHud();
   }
@@ -553,3 +563,4 @@ export class Match {
 }
 Match.ZP = ZONE_PHASES;
 installBots(Match);
+installVehicles(Match);

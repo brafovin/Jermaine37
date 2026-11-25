@@ -22,6 +22,7 @@ export class HUD {
     <div id="progress"><i></i></div>
     <div id="toasts"></div>
     <div id="chute"></div>
+    <div id="speedo"><b id="h-spd">0</b><span>km/h</span><div class="vhp"><i id="h-vhp"></i></div></div>
     <div class="hud-bl">
       <div class="bar hp"><i id="h-hp"></i><span id="h-hpt">100</span></div>
       <div class="bar ar"><i id="h-ar"></i><span id="h-art">0</span></div>
@@ -79,6 +80,7 @@ export class HUD {
     const f = this.el('dmgflash'); f.style.opacity = 0.65; setTimeout(() => (f.style.opacity = 0), 120);
     if (angle !== null) { const d = this.el('dmgdir'); d.style.transform = `rotate(${angle}rad)`; d.style.opacity = 1; clearTimeout(this._dt); this._dt = setTimeout(() => (d.style.opacity = 0), 900); }
   }
+  setSpeedo(t, hp) { const e = this.el('speedo'); if (t === null) { if (this._c.spd !== null) { this._c.spd = null; e.style.display = 'none'; } return; } this._c.spd = t; e.style.display = 'block'; this.set('h-spd', t); this.el('h-vhp').style.width = Math.max(0, hp) * 100 + '%'; }
   setPrompt(t) { const p = this.el('prompt'); if (this._c.prompt !== t) { this._c.prompt = t; p.textContent = t; p.style.display = t ? 'block' : 'none'; } }
   setProgress(f) { const p = this.el('progress'); p.style.display = f > 0 ? 'block' : 'none'; p.firstChild.style.width = f * 100 + '%'; }
   setChute(t) { const c = this.el('chute'); if (this._c.chute !== t) { this._c.chute = t; c.innerHTML = t || ''; c.style.display = t ? 'block' : 'none'; } }

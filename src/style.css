@@ -149,3 +149,5 @@ kbd{background:#2a343a;border:1px solid #556;padding:1px 8px;border-radius:3px;m
 .res-rank{display:flex;gap:20px;align-items:center;justify-content:center;margin:10px 0;font-size:20px;text-align:left}.res-rank b{font-size:32px}.pos{color:#5dff8a}.neg{color:#ff6a6a}.res-rank small{color:#9fb0b8;text-transform:none}
 .res-lvl{background:#2a2f10;color:var(--yellow);padding:8px;font-size:22px;margin:10px 0}
 #results .btn.big{margin-top:14px}
+
+#speedo{right:30px;bottom:210px;text-align:right;display:none}#speedo b{font-size:64px;line-height:1}#speedo span{font-size:20px;margin-left:6px;color:#cfd8dc}.vhp{width:160px;height:8px;background:#0009;border:1px solid #fff5;margin-left:auto;margin-top:4px}.vhp i{display:block;height:100%;background:linear-gradient(90deg,#d63a3a,#f4e63a)}

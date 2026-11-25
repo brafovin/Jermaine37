@@ -64,4 +64,14 @@ export class AudioFX {
   step(vol = 0.15) { if (!this.ctx) return; this._noise(0.07, 700, 0.7, vol, 0); }
   match() { if (!this.ctx) return; this._tone(520, 0.15, 0.3, 'triangle'); this._tone(780, 0.15, 0.3, 'triangle', 0, 0.14); this._tone(1040, 0.3, 0.3, 'triangle', 0, 0.28); }
   heal() { if (!this.ctx) return; this._tone(500, 0.3, 0.25, 'sine', 0, 0, 300); }
+  engine(frac, thr) {
+    if (!this.ctx) return;
+    if (!this._eng) {
+      const c = this.ctx, o = c.createOscillator(), o2 = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain();
+      o.type = 'sawtooth'; o2.type = 'square'; f.type = 'lowpass'; f.frequency.value = 500; g.gain.value = 0; o.connect(f); o2.connect(f); f.connect(g); g.connect(this.master); o.start(); o2.start(); this._eng = { o, o2, f, g };
+    }
+    const e = this._eng, t = this.ctx.currentTime, hz = 38 + frac * 110 + Math.abs(thr) * 8;
+    e.o.frequency.setTargetAtTime(hz, t, 0.08); e.o2.frequency.setTargetAtTime(hz * 0.5, t, 0.08); e.f.frequency.setTargetAtTime(300 + frac * 700 + Math.abs(thr) * 300, t, 0.1); e.g.gain.setTargetAtTime(0.07 + frac * 0.06 + Math.abs(thr) * 0.03, t, 0.1);
+  }
+  engineStop() { if (this._eng) this._eng.g.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1); }
 }
